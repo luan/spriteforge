@@ -173,6 +173,7 @@ def render(source: Path, output: Path) -> None:
                 scene.collection.objects.link(obj)
                 proxies.append(obj)
             bpy.context.window.scene = scene
+            scene.frame_set(frame)  # Shared material actions must follow the source sample too.
             scene.render.filepath = str(raw / f"{direction}-{frame:04d}.png")
             bpy.ops.render.render(write_still=True, scene=scene.name)
             if frame == settings.frames[0] and direction == settings.directions[0]:

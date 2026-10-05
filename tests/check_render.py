@@ -47,10 +47,14 @@ def main() -> None:
                 raise ValueError(f"{shading}: a face-material region was lost")
             if shading == "preserve" and (len(reds) < 2 or len(blues) < 2):
                 raise ValueError("packed UV paint disappeared during export")
+            if shading == "preserve":
+                with Image.open(output / "sprites/south-0001.png") as first, Image.open(output / "sprites/south-0002.png") as second:
+                    if first.tobytes() == second.tobytes():
+                        raise ValueError("UV animation disappeared during export")
         after = hashlib.sha256((directory / "source.blend").read_bytes()).hexdigest()
         if before != after:
             raise ValueError("source changed during export")
-    print("Passed: face materials, packed UV texture detail, source preservation, paths with spaces")
+    print("Passed: face materials, packed UV texture detail and animation, source preservation, paths with spaces")
 
 
 if __name__ == "__main__":

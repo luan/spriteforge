@@ -15,7 +15,7 @@ def main() -> None:
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
     skill_files = [p for p in SKILL.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"]
-    project_files = skill_files + [ROOT / "README.md", ROOT / ".gitignore", Path(__file__)] + list((ROOT / "tests").glob("*.py"))
+    project_files = skill_files + [ROOT / "README.md", ROOT / ".gitignore"] + list((ROOT / "tools").glob("*.py")) + list((ROOT / "tests").glob("*.py"))
     for name, files, base in [("spriteforge-skill.zip", skill_files, SKILL.parent),
                               ("spriteforge.zip", project_files, ROOT.parent)]:
         path = destination / name

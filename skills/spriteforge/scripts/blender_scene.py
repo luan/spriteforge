@@ -10,6 +10,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from settings import DIRECTIONS, Settings
+from style import SHADE_STOPS
 
 
 def sha256(path: Path) -> str:
@@ -27,6 +28,9 @@ def inspect(source: Path, report: Path) -> None:
                 materials.append({"name": mat.name, "image_textures": [n.image.name for n in mat.node_tree.nodes if n.type == "TEX_IMAGE" and n.image] if mat.use_nodes else []})
         objects.append({"name": obj.name, "type": obj.type, "hide_render": obj.hide_render,
                         "hide_viewport": obj.hide_viewport,
+                        "vertices": len(obj.data.vertices) if obj.type == "MESH" else None,
+                        "polygons": len(obj.data.polygons) if obj.type == "MESH" else None,
+                        "uv_maps": [uv.name for uv in obj.data.uv_layers] if obj.type == "MESH" else [],
                         "modifiers": [{"name": m.name, "type": m.type, "viewport": m.show_viewport,
                                        "render": m.show_render} for m in obj.modifiers],
                         "dimensions": list(obj.dimensions), "materials": materials})
@@ -54,7 +58,7 @@ def band_material(name: str, settings: Settings) -> bpy.types.Material:
     ramp.color_ramp.interpolation = "CONSTANT"
     ramp.color_ramp.elements.remove(ramp.color_ramp.elements[1])
     for index, color in enumerate(colors):
-        position = index * 0.85 / max(1, len(colors) - 1)
+        position = SHADE_STOPS[index] if len(colors) == 7 else index * 0.85 / max(1, len(colors) - 1)
         stop = ramp.color_ramp.elements[0] if index == 0 else ramp.color_ramp.elements.new(position)
         stop.position = position
         srgb = [v / 255 for v in bytes.fromhex(color)]
@@ -157,12 +161,14 @@ def render(source: Path, output: Path) -> None:
                 copy.transform(transform @ world)
                 if settings.shading == "bands":
                     originals = list(copy.materials)
-                    copy.materials.clear()
-                    for material in originals or [None]:
+                    for index, material in enumerate(originals or [None]):
                         name = material.name if material else "default"
                         if name not in materials:
                             materials[name] = band_material(name, settings)
-                        copy.materials.append(materials[name])
+                        if originals:
+                            copy.materials[index] = materials[name]
+                        else:
+                            copy.materials.append(materials[name])
                 obj = bpy.data.objects.new("Pixel Proxy", copy)
                 scene.collection.objects.link(obj)
                 proxies.append(obj)

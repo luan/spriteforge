@@ -14,6 +14,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/spriteforge/scripts"))
 from pixels import finish_image, validate_image
 from settings import Settings
+from style import SHADE_STOPS, soft_ramp
 
 
 class PixelContractTests(unittest.TestCase):
@@ -43,6 +44,11 @@ class PixelContractTests(unittest.TestCase):
             path = Path(temporary) / "asset.json"
             settings.save(path)
             self.assertEqual(settings, Settings.load(path))
+
+    def test_soft_fill_preserves_material_hues(self):
+        self.assertEqual(["66453a", "785144", "895d4d", "9b6c59", "ad7c65", "bb8a71", "c9987d"],
+                         soft_ramp(["583a32", "825749", "ad7c65", "ce9d82"]))
+        self.assertEqual((0, .12, .26, .4, .54, .68, .82), SHADE_STOPS)
 
     def test_finishing_locks_palette_alpha_and_native_contour(self):
         settings = self.load(self.config)

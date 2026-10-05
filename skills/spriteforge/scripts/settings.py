@@ -33,7 +33,7 @@ class Settings:
     light: tuple[float, ...] = (-0.5, -0.65, 1)
     outline: str | None = "10151c"
     shading: str = "bands"
-    fps: float = 8
+    fps: float = 30
     tileable: bool = False
 
     @classmethod
@@ -85,7 +85,7 @@ class Settings:
         shading = data.get("shading", "bands")
         if shading not in ("bands", "preserve"):
             raise ValueError("shading must be bands or preserve")
-        fps = number(data.get("fps", 8), "fps")
+        fps = number(data.get("fps", 30), "fps")
         if not 0 < fps <= 100:
             raise ValueError("fps must be positive and at most 100")
         tileable = data.get("tileable", False)

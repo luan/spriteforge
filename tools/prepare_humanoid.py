@@ -51,7 +51,7 @@ def main() -> None:
     bone("chest", (0, 0, 1.17), (0, 0, 1.37), "spine")
     bone("neck", (0, 0, 1.37), (0, -.014, 1.49), "chest")
     bone("head", (0, -.014, 1.49), (0, -.018, 1.68), "neck")
-    for sign, side in [(-1, "L"), (1, "R")]:
+    for sign, side in [(1, "L"), (-1, "R")]:
         bone(f"shoulder.{side}", (0, 0, 1.34), (sign * .16, 0, 1.345), "chest")
         bone(f"upperarm.{side}", (sign * .16, 0, 1.345), (sign * .29, -.005, 1.115), f"shoulder.{side}")
         bone(f"forearm.{side}", (sign * .29, -.005, 1.115), (sign * .38, -.01, .925), f"upperarm.{side}")

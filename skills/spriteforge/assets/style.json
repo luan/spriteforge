@@ -3,7 +3,7 @@
     128,
     128
   ],
-  "pixels_per_unit": 19.725860665832794,
+  "pixels_per_unit": 24,
   "palette": {
     "skin": [
       "66453a",
@@ -163,7 +163,7 @@
     -0.65,
     1
   ],
-  "outline": "10151c",
+  "outline": null,
   "fps": 30,
   "shading": "preserve"
 }

@@ -1,5 +1,6 @@
 """Source fixtures for public renderer behavior; run inside Blender."""
 import json
+import math
 from pathlib import Path
 import sys
 import bpy
@@ -36,6 +37,18 @@ uv = mesh.uv_layers.new(name="UVMap")
 for polygon in mesh.polygons:
     for loop, coordinate in zip(polygon.loop_indices, [(0, 0), (1, 0), (1, 1), (0, 1)]):
         uv.data[loop].uv = coordinate
+if '--paint-guide' in sys.argv:
+    # Distinct islands allow a single object map to retain both materials.
+    for polygon in mesh.polygons:
+        for loop in polygon.loop_indices:
+            uv.data[loop].uv.x = uv.data[loop].uv.x*.4+polygon.index*.6
+    obj.rotation_euler.x = -math.pi / 3
+if '--shell-guide' in sys.argv:
+    obj.rotation_euler.x = math.pi / 3
+    shell = obj.modifiers.new('Cloth underside', 'SOLIDIFY')
+    shell.thickness = .1
+elif '--exterior-guide' in sys.argv:
+    obj.rotation_euler.x = math.pi / 3
 bpy.context.preferences.filepaths.save_version = 0
 bpy.context.scene.frame_set(1)
 bpy.ops.wm.save_as_mainfile(filepath=str(directory / "source.blend"))

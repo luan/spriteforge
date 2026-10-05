@@ -69,7 +69,10 @@ def bake(target, motion, source_action, mapping, fps):
         else:
             motion.animation_data.action = source_action
             motion.animation_data.action_slot = source_action.slots[0]
-            source_frame = start + frame * source_fps / fps
+            # A rounded sprite sample count must still include the exact closing
+            # pose or one-shot endpoint when the source duration is indivisible.
+            intervals = count if loop else max(1, count - 1)
+            source_frame = start + (end - start) * frame / intervals
             bpy.context.scene.frame_set(math.floor(source_frame), subframe=source_frame % 1)
         posed = {}
         for bone in sorted(target.pose.bones, key=lambda b: len(b.parent_recursive)):
@@ -128,7 +131,7 @@ def main():
     parser.add_argument("--action", default="Walk_Loop")
     parser.add_argument("--rig", default="Rig")
     parser.add_argument("--bone-map", type=Path)
-    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--fps", type=int, default=12)
     parser.add_argument("--library", type=Path, default=Path(__file__).resolve().parents[1] / "assets/animations.blend")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     if args.output.exists() or args.fps <= 0:

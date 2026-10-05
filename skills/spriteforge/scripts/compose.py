@@ -14,7 +14,7 @@ from PIL import Image
 def record(config_path: Path, output: Path, mp4: bool) -> None:
     config = json.loads(config_path.read_text())
     width, height = config["size"]
-    fps = config.get("fps", 30)
+    fps = config.get("fps", 12)
     count = config["frames"]
     scale = config.get("scale", 1)
     if min(width, height, fps, count, scale) <= 0 or not isinstance(scale, int):
@@ -23,8 +23,8 @@ def record(config_path: Path, output: Path, mp4: bool) -> None:
     for name, relative in config["assets"].items():
         directory = config_path.parent / relative
         manifest = json.loads((directory / "manifest.json").read_text())
-        if len(manifest["frames"]) > 1 and manifest["fps"] != fps:
-            raise ValueError(f"{name}: animation rate differs from scene rate")
+        if len(manifest["frames"]) > 1 and manifest["fps"] > fps:
+            raise ValueError(f"{name}: scene rate would skip animation poses")
         assets[name] = (manifest, Image.open(directory / manifest["atlas"]).convert("RGBA"))
     densities = {manifest["pixels_per_unit"] for manifest, _ in assets.values()}
     if len(densities) != 1:
@@ -40,7 +40,7 @@ def record(config_path: Path, output: Path, mp4: bool) -> None:
         for instance in instances:
             manifest, atlas = assets[instance["asset"]]
             source_frames = manifest["frames"]
-            index = (frame + instance.get("phase", 0)) % len(source_frames)
+            index = (int(frame * manifest["fps"] / fps) + instance.get("phase", 0)) % len(source_frames)
             direction = instance.get("direction", manifest["directions"][0])
             row = manifest["directions"].index(direction)
             cell_width, cell_height = manifest["size"]

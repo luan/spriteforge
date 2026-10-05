@@ -32,7 +32,11 @@ def main() -> None:
             (directory / f"{name}.png").unlink()
         settings = json.loads((directory / "settings.json").read_text())
         for shading in ("bands", "preserve"):
-            settings["shading"] = shading
+            if shading == 'preserve':
+                settings.pop('shading', None)  # Default export must retain authored paint.
+                settings.pop('palette', None)  # Textured export needs no color restriction.
+            else:
+                settings['shading'] = shading
             (directory / "settings.json").write_text(json.dumps(settings))
             output = directory / shading
             subprocess.run(["uv", "run", "--script", str(ROOT / "skills/spriteforge/scripts/pipeline.py"),
@@ -48,6 +52,12 @@ def main() -> None:
             if shading == "preserve" and (len(reds) < 2 or len(blues) < 2):
                 raise ValueError("packed UV paint disappeared during export")
             if shading == "preserve":
+                # Native sampling must retain sharp painted region boundaries,
+                # including edges crossing between material regions.
+                if reds != {(170,0,0,255),(68,0,0,255)} or blues != {(0,0,170,255),(0,0,68,255)}:
+                    raise ValueError(f"native texture boundaries were blended or recolored: red={reds}, blue={blues}")
+                if colors - reds - blues != {(0,0,0,0)}:
+                    raise ValueError("native material boundaries were blended")
                 with Image.open(output / "sprites/south-0001.png") as first, Image.open(output / "sprites/south-0002.png") as second:
                     if first.tobytes() == second.tobytes():
                         raise ValueError("UV animation disappeared during export")

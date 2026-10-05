@@ -1,5 +1,5 @@
 """The asset contract shared by rendering and pixel finishing."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import json
 import math
 from pathlib import Path
@@ -23,18 +23,20 @@ def vector(value: object, length: int, label: str) -> tuple[float, ...]:
 class Settings:
     size: tuple[int, int]
     pixels_per_unit: float
-    palette: dict[str, tuple[str, ...]]
+    palette: dict[str, tuple[str, ...]] = field(default_factory=dict)
     collection: str | None = None
     frames: tuple[int, ...] = (1,)
     directions: tuple[str, ...] = tuple(DIRECTIONS)
     pivot: tuple[float, ...] = (0, 0, 0)
     anchor: tuple[float, ...] = (0.5, 0.8)
-    shear: tuple[float, ...] = (-0.45, 0.45)
+    shear: tuple[float, ...] = (0, 0.85)
     light: tuple[float, ...] = (-0.5, -0.65, 1)
-    outline: str | None = "10151c"
-    shading: str = "bands"
-    fps: float = 30
+    outline: str | None = "242220"
+    shading: str = "preserve"
+    fps: float = 12
     tileable: bool = False
+    supersample: int = 1
+    cluster_materials: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -50,13 +52,13 @@ class Settings:
         density = number(data.get("pixels_per_unit"), "pixels_per_unit")
         if density <= 0:
             raise ValueError("pixels_per_unit must be positive")
-        ramps = data.get("palette")
-        if not isinstance(ramps, dict) or not ramps:
+        ramps = data.get("palette", {})
+        if not isinstance(ramps, dict):
             raise ValueError("palette must map material names to shade lists")
         palette = {}
         for name, colors in ramps.items():
-            if not isinstance(name, str) or not name or not isinstance(colors, list) or not 1 <= len(colors) <= 16:
-                raise ValueError("each material needs 1 to 16 colors")
+            if not isinstance(name, str) or not name or not isinstance(colors, list) or not colors:
+                raise ValueError("each material needs a nonempty color list")
             palette[name] = tuple(hexcolor(c) for c in colors)
         frames = data.get("frames", [1])
         if not isinstance(frames, list) or not frames or any(type(f) is not int for f in frames):
@@ -71,21 +73,21 @@ class Settings:
         collection = data.get("collection")
         if collection is not None and (not isinstance(collection, str) or not collection):
             raise ValueError("collection must be a nonempty name")
-        outline = data.get("outline", "10151c")
+        outline = data.get("outline", "242220")
         if outline is not None:
             outline = hexcolor(outline)
-        if len({c for ramp in palette.values() for c in ramp} | ({outline} if outline else set())) > 256:
-            raise ValueError("the combined palette exceeds 256 colors")
         anchor = vector(data.get("anchor", [0.5, 0.8]), 2, "anchor")
         if any(not 0 <= v <= 1 for v in anchor):
             raise ValueError("anchor must be normalized coordinates from 0 to 1")
         light = vector(data.get("light", [-0.5, -0.65, 1]), 3, "light")
         if not any(light):
             raise ValueError("light must be nonzero")
-        shading = data.get("shading", "bands")
+        shading = data.get("shading", "preserve")
         if shading not in ("bands", "preserve"):
             raise ValueError("shading must be bands or preserve")
-        fps = number(data.get("fps", 30), "fps")
+        if shading == "bands" and not palette:
+            raise ValueError("bands shading needs material color ramps")
+        fps = number(data.get("fps", 12), "fps")
         if not 0 < fps <= 100:
             raise ValueError("fps must be positive and at most 100")
         tileable = data.get("tileable", False)
@@ -93,10 +95,19 @@ class Settings:
             raise ValueError("tileable must be a boolean")
         if tileable and outline is not None:
             raise ValueError("tileable assets require outline: null")
+        supersample = data.get('supersample', 1)
+        if type(supersample) is not int or not 1 <= supersample <= 8:
+            raise ValueError('supersample must be an integer from 1 to 8')
+        # Larger coverage grids need tiled rendering to bound memory usage.
+        if max(size)*supersample > 8192:
+            raise ValueError('coverage grid dimensions must not exceed 8192')
+        clusters = data.get('cluster_materials', [])
+        if not isinstance(clusters,list) or any(type(name) is not str or name not in palette for name in clusters):
+            raise ValueError('cluster_materials must name palette materials')
         return cls(tuple(int(v) for v in size), density, palette, collection,
                    tuple(frames), tuple(directions), vector(data.get("pivot", [0, 0, 0]), 3, "pivot"),
-                   anchor, vector(data.get("shear", [-0.45, 0.45]), 2, "shear"),
-                   light, outline, shading, fps, tileable)
+                   anchor, vector(data.get("shear", [0, 0.85]), 2, "shear"),
+                   light, outline, shading, fps, tileable, supersample, tuple(clusters))
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self), indent=2) + "\n")

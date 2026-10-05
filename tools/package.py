@@ -3,8 +3,9 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Package only maintained files, excluding generated assets and local state."""
+"""Package the skill and Git-tracked project, including maintained examples."""
 from pathlib import Path
+import subprocess
 from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,8 @@ def main() -> None:
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
     skill_files = [p for p in SKILL.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"]
-    project_files = skill_files + [ROOT / "README.md", ROOT / ".gitignore"] + list((ROOT / "tools").glob("*.py")) + list((ROOT / "tests").glob("*.py"))
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
+    project_files = [ROOT / name.decode() for name in tracked.split(b"\0") if name]
     for name, files, base in [("spriteforge-skill.zip", skill_files, SKILL.parent),
                               ("spriteforge.zip", project_files, ROOT.parent)]:
         path = destination / name

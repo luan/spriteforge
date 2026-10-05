@@ -114,11 +114,12 @@ def render(source: Path, output: Path) -> None:
     scene = bpy.data.scenes.new("Pixel Render")
     scene.render.engine = "BLENDER_EEVEE"
     scene.eevee.taa_render_samples = 1
-    scene.render.resolution_x, scene.render.resolution_y = settings.size
+    scene.render.resolution_x, scene.render.resolution_y = [v * settings.supersample for v in settings.size]
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
+    scene.render.dither_intensity = 0
     scene.render.use_compositing = scene.render.use_sequencer = False
     scene.view_settings.view_transform = "Standard"
     scene.view_settings.look = "None"
@@ -177,7 +178,7 @@ def render(source: Path, output: Path) -> None:
             scene.render.filepath = str(raw / f"{direction}-{frame:04d}.png")
             bpy.ops.render.render(write_still=True, scene=scene.name)
             if frame == settings.frames[0] and direction == settings.directions[0]:
-                scene["Pixel workflow"] = "Evaluated proxies; source scene retained; fixed scale/anchor; normal ramps and palette finishing."
+                scene["Pixel workflow"] = "Evaluated proxies; source scene retained; fixed scale/anchor; full RGB native export."
                 scene["Source sha256"] = source_hash
                 bpy.context.preferences.filepaths.save_version = 0
                 bpy.ops.wm.save_as_mainfile(filepath=str(output / "scene.blend"))

@@ -17,7 +17,7 @@ from settings import Settings
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["inspect", "render"])
+    parser.add_argument("command", choices=["inspect", "review", "render"])
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--output", type=Path)
@@ -29,8 +29,11 @@ def main() -> None:
     blender = shutil.which(args.blender)
     if not blender:
         parser.error("Blender is missing; install Blender 5.2 or pass --blender /path/to/blender")
-    script = Path(__file__).with_name("blender_scene.py")
-    base = [blender, "--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1", "--python", str(script), "--", args.command, "--source", str(args.source.resolve())]
+    script = Path(__file__).with_name("review_model.py" if args.command == "review" else "blender_scene.py")
+    base = [blender, "--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1", "--python", str(script), "--"]
+    if args.command != "review":
+        base.append(args.command)
+    base += ["--source", str(args.source.resolve())]
     if args.command == "inspect":
         with tempfile.TemporaryDirectory(prefix="pixel-inspect-") as temporary:
             report = Path(temporary) / "inspection.json"
@@ -38,15 +41,29 @@ def main() -> None:
             print(report.read_text(), end="")
         return
     if args.config is None or args.output is None:
-        parser.error("render requires --config and --output")
+        parser.error(f"{args.command} requires --config and --output")
     settings = Settings.load(args.config)
-    if args.preview:
+    if args.preview and args.command == "render":
         settings = replace(settings, frames=settings.frames[:1], directions=settings.directions[:1])
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.mkdir()  # Fresh output is required; failed runs remain available for diagnosis.
     settings.save(output / "asset.json")
     subprocess.run(base + ["--output", str(output)], check=True, stdout=sys.stderr)
+    if args.command == "review":
+        from PIL import Image, ImageDraw
+        manifest = json.loads((output / "manifest.json").read_text())
+        for stage in ("clay", "paint"):
+            sheet = Image.new('RGB',(1024,280*len(manifest['frames'])),(30,33,38))
+            draw = ImageDraw.Draw(sheet)
+            for row,frame in enumerate(manifest['frames']):
+                for column,direction in enumerate(manifest['directions']):
+                    with Image.open(output/stage/f'{direction}-{frame:04d}.png') as image:
+                        sheet.paste(image.resize((256,256)),(column*256,row*280+24))
+                    draw.text((column*256+8,row*280+6),f'{direction} / {frame}',fill='white')
+            sheet.save(output/f'{stage}-review.png')
+        print(json.dumps({"output":str(output),"geometry":str(output/'clay-review.png'),"paint":str(output/'paint-review.png')}))
+        return
     from pixels import finish
     finish(output)
     manifest = json.loads((output / "manifest.json").read_text())

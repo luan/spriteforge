@@ -1,23 +1,84 @@
-"""Palette-lock, validate, and assemble native-resolution sprites."""
+"""Preserve source colors, validate, and assemble native-resolution sprites."""
 import json
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from settings import Settings
 
 
+def cohere_shading(image: Image.Image, palettes: list[set[tuple[int, int, int]]]) -> Image.Image:
+    """Merge tiny interior shade regions into supported adjacent paint regions."""
+    if not palettes:
+        return image
+    width,height = image.size
+    data = list(image.get_flattened_data())
+    groups, labels = [], [-1]*len(data)
+    for start,color in enumerate(data):
+        if not color[3] or labels[start] >= 0:
+            continue
+        component, pending = [], [start]
+        labels[start] = len(groups)
+        while pending:
+            position = pending.pop(); component.append(position)
+            x,y = position%width,position//width
+            for dy in (-1,0,1):
+                for dx in (-1,0,1):
+                    nx,ny = x+dx,y+dy
+                    if (dx or dy) and 0 <= nx < width and 0 <= ny < height:
+                        neighbor = ny*width+nx
+                        if labels[neighbor] < 0 and data[neighbor] == color:
+                            labels[neighbor] = len(groups); pending.append(neighbor)
+        groups.append(component)
+    result = data.copy()
+    for component in groups:
+        # Three native pixels distinguish a paint cluster from an isolated speck.
+        # Focal accents use materials omitted from cluster_materials.
+        if len(component) >= 3:
+            continue
+        color = data[component[0]]
+        allowed = set().union(*(p for p in palettes if color[:3] in p))
+        if not allowed:
+            continue
+        neighbors = {}
+        interior = True
+        for position in component:
+            x,y = position%width,position//width
+            if x==0 or y==0 or x==width-1 or y==height-1:
+                interior = False; break
+            for dy in (-1,0,1):
+                for dx in (-1,0,1):
+                    if not (dx or dy): continue
+                    neighbor = (y+dy)*width+x+dx
+                    candidate = data[neighbor]
+                    if not candidate[3]: interior = False
+                    if candidate[:3] in allowed and labels[neighbor] >= 0 and len(groups[labels[neighbor]]) >= 3:
+                        neighbors[candidate] = neighbors.get(candidate,0)+1
+        if interior and neighbors:
+            replacement = max(neighbors,key=neighbors.get)
+            for position in component: result[position] = replacement
+    coherent = Image.new('RGBA',image.size)
+    coherent.putdata(result)
+    return coherent
+
+
 def finish_image(image: Image.Image, settings: Settings) -> Image.Image:
-    colors = list(dict.fromkeys(c for ramp in settings.palette.values() for c in ramp))
-    if settings.outline and settings.outline not in colors:
-        colors.append(settings.outline)
-    palette = [tuple(bytes.fromhex(c)) for c in colors]
-    lookup = Image.new("P", (1, 1))
-    lookup.putpalette([v for color in palette for v in color] + list(palette[0]) * (256 - len(palette)))
-    image = image.convert("RGBA")
-    alpha = image.getchannel("A").point(lambda a: 255 if a >= 128 else 0)
-    result = image.convert("RGB").quantize(palette=lookup, dither=Image.Dither.NONE).convert("RGBA")
+    image = image.convert('RGBA')
+    factor = settings.supersample if image.size != settings.size else 1
+    expected = tuple(v * factor for v in settings.size)
+    if image.size != expected:
+        raise ValueError(f'wrong render size: {image.size}, expected {expected}')
+    if factor > 1:
+        # Integrate coverage in premultiplied RGBA; transparent RGB cannot tint
+        # edge pixels. Source colors are never snapped to material shade lists.
+        image = image.resize(settings.size, Image.Resampling.BOX)
+    result = image.copy()
+    alpha = image.getchannel('A').point(lambda a:255 if a >= 128 else 0)
     result.putalpha(alpha)
+    protected = {tuple(bytes.fromhex(c)) for name,ramp in settings.palette.items()
+                 if name not in settings.cluster_materials for c in ramp}
+    result = cohere_shading(result,[{tuple(bytes.fromhex(c)) for c in settings.palette[name]}-protected
+                                   for name in settings.cluster_materials])
     if settings.outline:
-        contour = Image.new("RGBA", image.size, (*bytes.fromhex(settings.outline), 0))
+        contour = Image.new("RGBA", settings.size, (*bytes.fromhex(settings.outline), 0))
         contour.putalpha(alpha.filter(ImageFilter.MaxFilter(3)))
         contour.alpha_composite(result)
         result = contour
@@ -30,12 +91,9 @@ def validate_image(image: Image.Image, settings: Settings) -> dict:
     box = image.getbbox()
     if box is None:
         raise ValueError("empty sprite")
-    allowed = {tuple(bytes.fromhex(c)) for ramp in settings.palette.values() for c in ramp}
-    if settings.outline:
-        allowed.add(tuple(bytes.fromhex(settings.outline)))
     for pixel in image.get_flattened_data():
-        if pixel[3] not in (0, 255) or (pixel[3] and pixel[:3] not in allowed):
-            raise ValueError("sprite contains an invalid alpha or palette color")
+        if pixel[3] not in (0, 255):
+            raise ValueError("sprite contains invalid alpha")
     width, height = image.size
     if settings.tileable:
         if image.getchannel("A").getextrema() != (255, 255):

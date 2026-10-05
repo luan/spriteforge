@@ -20,20 +20,25 @@ def main():
     before = hashlib.sha256(source.read_bytes()).digest()
     with tempfile.TemporaryDirectory(prefix='spriteforge motion ') as temporary:
         directory = Path(temporary)
-        for clip in ['Walk_Loop', 'Jump_Start']:
-            output = directory / f'{clip}.blend'
+        for clip, fps in [('Walk_Loop', 12), ('Walk_Loop', 11), ('Jump_Start', 12)]:
+            output = directory / f'{clip}-{fps}.blend'
             command = BLENDER + ['--python', str(SKILL / 'scripts/retarget.py'), '--',
                 '--source', str(source), '--output', str(output), '--action', clip]
+            if fps != 12:
+                command += ['--fps', str(fps)]
             subprocess.run(command, check=True, capture_output=True)
-            report = directory / f'{clip}.json'
+            report = directory / f'{clip}-{fps}.json'
             subprocess.run(BLENDER + ['--python', str(ROOT / 'tests/motion_report.py'), '--',
                 '--source', str(output), '--output', str(report)], check=True, capture_output=True)
             data = json.loads(report.read_text())
-            if data['fps'] != 30 or data['action']['Source clip'] != clip:
+            if data['fps'] != fps or data['action']['Source clip'] != clip:
                 raise ValueError('source timing or attribution lost')
             if clip == 'Walk_Loop':
-                if data['range'] != [1, 40] or not data['action']['Loop']:
+                expected_count = round(40 * fps / 30)
+                if data['range'] != [1, expected_count] or not data['action']['Loop']:
                     raise ValueError('walk duration changed')
+                if abs(expected_count / fps - 40 / 30) > .5 / fps:
+                    raise ValueError('walk duration rounded beyond half a pose interval')
                 first, closing = data['frames'][0], data['frames'][-1]
                 if first['quaternions'] != closing['quaternions']:
                     raise ValueError('walk closing pose differs')
@@ -42,7 +47,7 @@ def main():
                 if not 1.8 < data['action']['Travel speed'] < 2.1:
                     raise ValueError('source-derived movement speed lost')
                 for bone in ['thigh.L', 'thigh.R', 'upperarm.L', 'upperarm.R']:
-                    if len({tuple(f['quaternions'][bone]) for f in data['frames']}) < 30:
+                    if len({tuple(f['quaternions'][bone]) for f in data['frames']}) < 12:
                         raise ValueError(f'motion missing on {bone}')
             elif data['action']['Loop'] or data['frames'][0]['quaternions'] == data['frames'][-2]['quaternions']:
                 raise ValueError('one-shot endpoint was treated as a loop')

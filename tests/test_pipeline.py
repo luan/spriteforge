@@ -34,6 +34,9 @@ class PixelContractTests(unittest.TestCase):
                   {"size": [0, 16]}, {"size": [16.5, 20]}, {"anchor": [0.5, 2]},
                   {"palette": {"cloth": ["#112233"]}}, {"tileable": True},
                   {"light": [0, 0, 0]}, {"unexpected": True}]
+        cases += [{'supersample':v} for v in (0,9,True,1.5)]
+        cases += [{'cluster_materials':['missing']}, {'cluster_materials':'cloth'}]
+        cases += [{'size':[4096,4096],'supersample':4}]
         for changes in cases:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.load({**self.config, **changes})
@@ -50,7 +53,7 @@ class PixelContractTests(unittest.TestCase):
                          soft_ramp(["583a32", "825749", "ad7c65", "ce9d82"]))
         self.assertEqual((0, .12, .26, .4, .54, .68, .82), SHADE_STOPS)
 
-    def test_finishing_locks_palette_alpha_and_native_contour(self):
+    def test_finishing_preserves_source_colors_alpha_and_native_contour(self):
         settings = self.load(self.config)
         rng = random.Random(42)
         for _ in range(25):
@@ -60,6 +63,7 @@ class PixelContractTests(unittest.TestCase):
                     image.putpixel((x, y), tuple(rng.randrange(256) for _ in range(3)) + (rng.choice([127, 128, 255]),))
             image.putpixel((8, 9), (255, 0, 0, 255))
             result = finish_image(image, settings)
+            self.assertEqual((255,0,0,255), result.getpixel((8,9)))
             self.assertEqual(settings.size, result.size)
             validate_image(result, settings)
             self.assertEqual({0, 255}, {p[3] for p in result.get_flattened_data()})
@@ -73,6 +77,56 @@ class PixelContractTests(unittest.TestCase):
                 image.putpixel(position, (17, 34, 51, 255))
             with self.subTest(position=position), self.assertRaises(ValueError):
                 validate_image(finish_image(image, settings), settings)
+
+    def test_coverage_integrates_subpixel_detail_without_phase_flicker(self):
+        settings = self.load({**self.config,'outline':None,'supersample':4})
+        dark, light = (17,34,51,255),(170,187,204,255)
+        results = []
+        for phase in range(4):
+            image = Image.new('RGBA',(64,80),dark)
+            for y in range(0,80,4):
+                for x in range(0,64,4): image.putpixel((x+phase,y+phase),light)
+            results.append(finish_image(image,settings).tobytes())
+        self.assertEqual([results[0]]*4,results)
+        color = Image.frombytes('RGBA',settings.size,results[0]).getpixel((8,8))
+        self.assertTrue(all(a < c < b for a,c,b in zip(dark[:3],color[:3],light[:3])))
+
+    def test_export_preserves_more_than_256_colors_without_a_palette(self):
+        settings = self.load({'size':[24,24],'pixels_per_unit':8,'outline':None})
+        image = Image.new('RGBA',settings.size)
+        for y in range(2,22):
+            for x in range(2,22):
+                image.putpixel((x,y),(x*10,y*10,(x+y)*5,255))
+        result = finish_image(image,settings)
+        validate_image(result,settings)
+        self.assertEqual(image.tobytes(),result.tobytes())
+        self.assertGreater(len({p[:3] for p in result.get_flattened_data() if p[3]}),256)
+
+    def test_transparent_rgb_does_not_tint_covered_edge_pixels(self):
+        settings = self.load({'size':[16,20],'pixels_per_unit':8,'outline':None,'supersample':4})
+        image = Image.new('RGBA',(64,80),(255,0,0,0))
+        image.paste((120,180,240,255),(20,20,23,24))
+        self.assertEqual((120,180,240,255),finish_image(image,settings).getpixel((5,5)))
+
+    def test_surface_clusters_preserve_focal_accents_and_supported_detail(self):
+        settings = self.load({**self.config,'outline':None,'cluster_materials':['cloth'],
+            'palette':{'cloth':['112233','aabbcc'],'pin':['ffcc33']}})
+        image = Image.new('RGBA',settings.size)
+        image.paste((17,34,51,255),(2,3,14,18))
+        image.putpixel((4,5),(170,187,204,255))
+        image.putpixel((2,7),(170,187,204,255))
+        image.putpixel((8,9),(255,204,51,255))
+        for xy in ((10,12),(11,12),(10,13),(11,13)):image.putpixel(xy,(170,187,204,255))
+        result = finish_image(image,settings)
+        self.assertEqual((17,34,51,255),result.getpixel((4,5)))
+        self.assertEqual((255,204,51,255),result.getpixel((8,9)))
+        self.assertEqual((170,187,204,255),result.getpixel((2,7)))
+        self.assertEqual(image.getchannel('A').tobytes(),result.getchannel('A').tobytes())
+        for xy in ((10,12),(11,12),(10,13),(11,13)):
+            self.assertEqual((170,187,204,255),result.getpixel(xy))
+        shared = self.load({**self.config,'outline':None,'cluster_materials':['cloth'],
+            'palette':{'cloth':['112233','aabbcc'],'pin':['aabbcc']}})
+        self.assertEqual((170,187,204,255),finish_image(image,shared).getpixel((4,5)))
 
     def test_ground_requires_opaque_matching_edges(self):
         settings = self.load({**self.config, "tileable": True, "outline": None})

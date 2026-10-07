@@ -52,6 +52,28 @@ def main():
             colors=set(image.convert('RGBA').get_flattened_data())
         if (68,0,0,255) not in colors or (0,0,170,255) not in colors or (170,0,0,255) in colors:
             raise ValueError('new paint islands changed the original UV input')
+        require_success(blender(SCRIPTS/'bake_paint.py', '--source', source,
+            '--config', config, '--maps', directory/'frozen maps',
+            '--output', directory/'fixed reuse.blend', '--reuse',
+            '--uv-source', directory/'frozen.blend', '--roles', 'red'))
+        require_success(subprocess.run(['uv','run','--script',str(SCRIPTS/'pipeline.py'),'render',
+            '--source',str(directory/'fixed reuse.blend'),'--config',str(config),
+            '--output',str(directory/'fixed reuse render'),'--preview'],capture_output=True,text=True))
+        with Image.open(directory/'frozen render/sprites/south-0001.png') as expected, \
+             Image.open(directory/'fixed reuse render/sprites/south-0001.png') as actual:
+            if actual.convert('RGBA').tobytes() != expected.convert('RGBA').tobytes():
+                raise ValueError('reusing exact baked UVs changed the authored paint')
+        changed = directory/'changed topology'
+        changed.mkdir()
+        for role in ('red', 'blue'):
+            (changed/(role+'.png')).write_bytes((directory/(role+'.png')).read_bytes())
+        require_success(blender(ROOT/'tests/render_fixture.py', changed,
+                                '--paint-guide', '--reordered-topology'))
+        rejected = blender(SCRIPTS/'bake_paint.py', '--source', changed/'source.blend',
+            '--config', config, '--maps', directory/'frozen maps',
+            '--output', changed/'reuse.blend', '--reuse', '--uv-source', directory/'frozen.blend')
+        if rejected.returncode == 0 or 'Topology changed' not in rejected.stderr or (changed/'reuse.blend').exists():
+            raise ValueError('incompatible topology was accepted for UV reuse')
         maps = directory/'paint maps'
         arguments = ['--source', source, '--config', directory/'settings.json',
                      '--maps', maps, '--resolution', '32','--form-guide']
@@ -106,7 +128,7 @@ def main():
         surface = next(o for o in json.loads(inspection.stdout)['objects'] if o['name']=='Painted surface')
         if not any(m['type']=='SOLIDIFY' and m['viewport'] and m['render'] for m in surface['modifiers']):
             raise ValueError('paint bake removed or disabled the garment shell')
-    print('Passed: form guide, material regions, unchanged reuse, packed portability, collision protection, exterior shell paint, input preservation')
+    print('Passed: form guide, exact UV reuse, incompatible topology rejection, material regions, packed portability, collision protection, exterior shell paint, input preservation')
 
 
 if __name__ == '__main__':

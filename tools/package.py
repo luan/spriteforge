@@ -3,27 +3,21 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Package the skill and Git-tracked project, including maintained examples."""
+"""Package the committed skill and project without including local experiments."""
 from pathlib import Path
 import subprocess
-from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "spriteforge"
 
 
 def main() -> None:
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
-    skill_files = [p for p in SKILL.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"]
-    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
-    project_files = [ROOT / name.decode() for name in tracked.split(b"\0") if name]
-    for name, files, base in [("spriteforge-skill.zip", skill_files, SKILL.parent),
-                              ("spriteforge.zip", project_files, ROOT.parent)]:
+    for name, tree in [("spriteforge-skill.zip", "HEAD:skills/spriteforge"),
+                       ("spriteforge.zip", "HEAD")]:
         path = destination / name
-        with ZipFile(path, "w", ZIP_DEFLATED) as archive:
-            for source in sorted(files):
-                archive.write(source, source.relative_to(base))
+        subprocess.run(["git", "archive", "--format=zip", "--prefix=spriteforge/",
+                        "--output=" + str(path), tree], cwd=ROOT, check=True)
         print(path)
 
 

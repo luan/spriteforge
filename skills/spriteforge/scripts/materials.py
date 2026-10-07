@@ -41,3 +41,32 @@ def pixel_material(name: str, shades: list[str] | None = None, texture: Path | N
     output = nodes.new("ShaderNodeOutputMaterial")
     links.new(surface, output.inputs["Surface"])
     return material
+
+
+def lit_material(name: str, color: str, texture: Path | None = None,
+                 roughness: float = .8, metallic: float = 0) -> bpy.types.Material:
+    """Continuous material shading; UV fields describe surfaces rather than views."""
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    surface = nodes.get("Principled BSDF")
+    surface.inputs["Base Color"].default_value = linear_color(color)
+    surface.inputs["Roughness"].default_value = roughness
+    surface.inputs["Metallic"].default_value = metallic
+    surface.inputs["Specular IOR Level"].default_value = .25
+    # A small material-colored fill keeps dark facings readable without banding.
+    surface.inputs["Emission Color"].default_value = linear_color(color)
+    surface.inputs["Emission Strength"].default_value = .04
+    occlusion = nodes.new("ShaderNodeAmbientOcclusion")
+    occlusion.inputs["Distance"].default_value = .12
+    occlusion.inputs["Color"].default_value = linear_color(color)
+    links.new(occlusion.outputs["Color"], surface.inputs["Base Color"])
+    links.new(occlusion.outputs["Color"], surface.inputs["Emission Color"])
+    if texture is not None:
+        paint = nodes.new("ShaderNodeTexImage")
+        paint.image = bpy.data.images.load(str(texture.resolve()), check_existing=True)
+        paint.image.pack()
+        paint.interpolation = "Closest"
+        links.new(paint.outputs["Color"], occlusion.inputs["Color"])
+        links.new(paint.outputs["Alpha"], surface.inputs["Alpha"])
+    return material

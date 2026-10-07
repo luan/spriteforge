@@ -140,6 +140,10 @@ def finish(directory: Path) -> None:
         preview_frames.append(preview)
     preview_frames[0].save(directory / "preview.png")
     if len(preview_frames) > 1:
+        durations = [round((i+1)*1000/settings.fps)-round(i*1000/settings.fps)
+                     for i in range(len(preview_frames))]
+        preview_frames[0].save(directory / "preview.webp", save_all=True,
+            append_images=preview_frames[1:],duration=durations,loop=0,lossless=True,method=4)
         durations = [max(10, (round((i + 1) * 100 / settings.fps) - round(i * 100 / settings.fps)) * 10) for i in range(len(preview_frames))]
         preview_frames[0].save(directory / "preview.gif", save_all=True, append_images=preview_frames[1:],
                                duration=durations, loop=0, disposal=2)

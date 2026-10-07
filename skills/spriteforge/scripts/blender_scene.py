@@ -107,6 +107,41 @@ def snapshots(scene: bpy.types.Scene, collection: str | None) -> list[tuple[bpy.
     return meshes
 
 
+def fit_canvas(scene, settings):
+    """Enlarge one fixed canvas across all poses without changing density or pivot."""
+    if any(not 0 < value < 1 for value in settings.anchor):
+        raise ValueError('automatic canvas fitting requires an anchor inside the cell')
+    original_frame=scene.frame_current
+    low=[float('inf'),float('inf')]
+    high=[float('-inf'),float('-inf')]
+    try:
+        for frame in settings.frames:
+            scene.frame_set(frame)
+            meshes=snapshots(scene,settings.collection)
+            try:
+                for direction in settings.directions:
+                    rotation=Matrix.Rotation(math.radians(DIRECTIONS[direction]),4,'Z')
+                    transform=rotation@Matrix.Translation(-Vector(settings.pivot))
+                    for mesh,world in meshes:
+                        matrix=transform@world
+                        for vertex in mesh.vertices:
+                            point=matrix@vertex.co
+                            projected=(point.x+settings.shear[0]*point.z,-point.y-settings.shear[1]*point.z)
+                            for axis,value in enumerate(projected):
+                                pixel=value*settings.pixels_per_unit
+                                low[axis]=min(low[axis],pixel)
+                                high[axis]=max(high[axis],pixel)
+            finally:
+                for mesh,_ in meshes:bpy.data.meshes.remove(mesh)
+    finally:
+        scene.frame_set(original_frame)
+    from dataclasses import replace
+    size=tuple(max(existing,math.ceil((max(-lo/anchor,hi/(1-anchor))+8)/16)*16)
+               for existing,lo,hi,anchor in zip(settings.size,low,high,settings.anchor))
+    if max(size)>4096:raise ValueError('fitted canvas exceeds the native size limit')
+    return replace(settings,size=size)
+
+
 def render(source: Path, output: Path) -> None:
     settings = Settings.load(output / "asset.json")
     original = bpy.context.scene
@@ -136,13 +171,30 @@ def render(source: Path, output: Path) -> None:
     width, height = settings.size
     camera.location = ((0.5 - settings.anchor[0]) * width / settings.pixels_per_unit,
                        (settings.anchor[1] - 0.5) * height / settings.pixels_per_unit, 100)
+    if settings.lighting == "studio":
+        angle = math.atan(settings.shear[1])
+        cosine, sine = math.cos(angle), math.sin(angle)
+        # An anamorphic orthographic camera retains square ground tiles and
+        # Y += shear*Z while shading the original geometry and normals.
+        scene.render.pixel_aspect_x = 1 / cosine
+        camera.data.ortho_scale = max(width, height * cosine) / settings.pixels_per_unit
+        camera.rotation_euler = (angle, 0, 0)
+        offset = (settings.anchor[1] - .5) * height * cosine / settings.pixels_per_unit
+        camera.location = Vector(((.5-settings.anchor[0])*width/settings.pixels_per_unit,
+                                  offset*cosine, offset*sine)) + Vector((0,-sine,cosine))*100
     scene.camera = camera
     if settings.shading == "preserve":
-        light = bpy.data.objects.new("Pixel Key", bpy.data.lights.new("Pixel Key", "SUN"))
-        scene.collection.objects.link(light)
-        light.rotation_euler = (-Vector(settings.light)).to_track_quat("-Z", "Y").to_euler()
-        light.data.energy = 2
-        light.data.angle = 0
+        lights = [("Key", settings.light, 2, (1, 1, 1))]
+        if settings.lighting == "studio":
+            lights = [("Key", settings.light, 2.5, (1, .94, .86)),
+                      ("Fill", (.65, -.25, .55), .9, (.80, .88, 1)),
+                      ("Rim", (.2, .8, 1), 1.0, (1, .96, .88))]
+        for name, direction, energy, color in lights:
+            light = bpy.data.objects.new("Pixel " + name, bpy.data.lights.new("Pixel " + name, "SUN"))
+            scene.collection.objects.link(light)
+            light.rotation_euler = (-Vector(direction)).to_track_quat("-Z", "Y").to_euler()
+            light.data.energy, light.data.color = energy, color
+            light.data.angle = .12 if settings.lighting == "studio" else 0
     materials = {}
     raw = output / "raw"
     raw.mkdir()
@@ -156,6 +208,8 @@ def render(source: Path, output: Path) -> None:
             rotation = Matrix.Rotation(math.radians(DIRECTIONS[direction]), 4, "Z")
             shear = Matrix(((1, 0, settings.shear[0], 0), (0, 1, settings.shear[1], 0), (0, 0, 1, 0), (0, 0, 0, 1)))
             transform = shear @ rotation @ Matrix.Translation(-Vector(settings.pivot))
+            if settings.lighting == "studio":
+                transform = rotation @ Matrix.Translation(-Vector(settings.pivot))
             proxies = []
             for mesh, world in evaluated:
                 copy = mesh.copy()

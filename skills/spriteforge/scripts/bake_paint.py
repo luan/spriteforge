@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--maps', type=Path, required=True)
     parser.add_argument('--reuse', action='store_true', help='apply the same paint to another motion')
+    parser.add_argument('--uv-source', type=Path, help='reuse the exact UV layout from this baked model')
+    parser.add_argument('--roles', nargs='+', help='bake only these material roles')
     parser.add_argument('--resolution', type=int, default=128)
     parser.add_argument('--unwrap', action='store_true', help='create unique paint islands while retaining the original UV input')
     parser.add_argument('--freeze', action='store_true', help='bake existing emission paint without adding form shades')
@@ -25,6 +27,8 @@ def main():
         raise ValueError('output must be fresh; map resolution must be at least 8')
     if args.freeze and args.form_guide:
         raise ValueError('freeze and form-guide are mutually exclusive')
+    if args.uv_source and (not args.reuse or args.unwrap):
+        raise ValueError('uv-source requires reuse and cannot be combined with unwrap')
     palette = json.loads(args.config.read_text()).get('palette',{})
     if not args.reuse:
         args.maps.mkdir(parents=True, exist_ok=False)
@@ -36,17 +40,42 @@ def main():
     scene.render.bake.margin = 2
     scene.render.bake.use_clear = True
     scene.render.dither_intensity = 0
+    rigs = [(obj, obj.data.pose_position) for obj in scene.objects if obj.type == 'ARMATURE']
+    for obj, _ in rigs:
+        obj.data.pose_position = 'REST'
+    bpy.context.view_layer.update()
+    targets = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data.uv_layers.active
+               and obj.data.materials and (not args.roles or obj.data.materials[0].name.split('.')[0] in args.roles)
+               and any(slot.material and slot.material.use_nodes and
+                       any(n.type == 'TEX_IMAGE' for n in slot.material.node_tree.nodes)
+                       for slot in obj.material_slots)]
+    templates = {}
+    if args.uv_source:
+        names = [obj.name for obj in targets]
+        with bpy.data.libraries.load(str(args.uv_source.resolve()), link=False) as (available, loaded):
+            if any(name not in available.objects for name in names):
+                raise ValueError('UV source is missing a target mesh')
+            loaded.objects = list(names)
+        templates = dict(zip(names, loaded.objects))
     painted_count = 0
-    for obj in list(scene.objects):
-        if obj.type != 'MESH' or not obj.data.uv_layers.active:
-            continue
-        if not any(slot.material and any(n.type == 'TEX_IMAGE' for n in slot.material.node_tree.nodes)
-                   for slot in obj.material_slots):
-            continue
+    for obj in targets:
         path = args.maps / (obj.name.replace('/', '_') + '.png')
         role = obj.data.materials[0].name.split('.')[0]
         original_uv = obj.data.uv_layers.active.name
-        if args.unwrap:
+        if args.uv_source:
+            template = templates[obj.name].data
+            if ([tuple(face.vertices) for face in template.polygons] !=
+                    [tuple(face.vertices) for face in obj.data.polygons]):
+                raise ValueError('Topology changed; rebake paint before reuse: ' + obj.name)
+            source_uv = template.uv_layers.active
+            if source_uv is None:
+                raise ValueError('UV source mesh has no active layout: ' + obj.name)
+            target_uv = obj.data.uv_layers.new(name='Fixed surface paint')
+            obj.data.uv_layers.active = target_uv
+            target_uv.active_render = True
+            for destination, coordinate in zip(target_uv.data, source_uv.data):
+                destination.uv = coordinate.uv
+        elif args.unwrap:
             bpy.ops.object.select_all(action='DESELECT')
             obj.select_set(True); bpy.context.view_layer.objects.active = obj
             target_uv = obj.data.uv_layers.new(name='Fixed surface paint')
@@ -114,6 +143,10 @@ def main():
         painted_count += 1
     if not painted_count:
         raise ValueError('source has no UV-painted meshes')
+    for obj in templates.values():
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for obj, pose in rigs:
+        obj.data.pose_position = pose
     scene.render.engine = 'BLENDER_EEVEE'
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output.resolve()), compress=True)

@@ -37,6 +37,7 @@ class Settings:
     tileable: bool = False
     supersample: int = 1
     cluster_materials: tuple[str, ...] = ()
+    lighting: str = "key"
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -104,10 +105,18 @@ class Settings:
         clusters = data.get('cluster_materials', [])
         if not isinstance(clusters,list) or any(type(name) is not str or name not in palette for name in clusters):
             raise ValueError('cluster_materials must name palette materials')
+        lighting = data.get('lighting', 'key')
+        if lighting not in ('key', 'studio'):
+            raise ValueError('lighting must be key or studio')
+        shear = vector(data.get("shear", [0, 0.85]), 2, "shear")
+        # The physical camera compensates vertical foreshortening. A diagonal
+        # cabinet projection needs a camera with a skewed image plane first.
+        if lighting == 'studio' and shear[0] != 0:
+            raise ValueError('studio lighting requires shear X = 0')
         return cls(tuple(int(v) for v in size), density, palette, collection,
                    tuple(frames), tuple(directions), vector(data.get("pivot", [0, 0, 0]), 3, "pivot"),
-                   anchor, vector(data.get("shear", [0, 0.85]), 2, "shear"),
-                   light, outline, shading, fps, tileable, supersample, tuple(clusters))
+                   anchor, shear,
+                   light, outline, shading, fps, tileable, supersample, tuple(clusters), lighting)
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self), indent=2) + "\n")

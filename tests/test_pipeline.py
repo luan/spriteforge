@@ -37,12 +37,14 @@ class PixelContractTests(unittest.TestCase):
         cases += [{'supersample':v} for v in (0,9,True,1.5)]
         cases += [{'cluster_materials':['missing']}, {'cluster_materials':'cloth'}]
         cases += [{'size':[4096,4096],'supersample':4}]
+        cases += [{'lighting':'unknown'}, {'lighting':'studio','shear':[.3,.8]}]
         for changes in cases:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.load({**self.config, **changes})
 
     def test_settings_round_trip_keeps_export_contract(self):
-        settings = self.load({**self.config, "outline": None, "frames": [1, 3, 5], "anchor": [0.4, 0.7]})
+        settings = self.load({**self.config, "outline": None, "frames": [1, 3, 5], "anchor": [0.4, 0.7],
+                              "lighting":"studio"})
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "asset.json"
             settings.save(path)

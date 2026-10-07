@@ -12,8 +12,11 @@ from materials import pixel_material
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 mesh = bpy.data.meshes.new("Two material regions")
+faces = [(0, 1, 2, 3), (1, 4, 5, 2)]
+if '--reordered-topology' in sys.argv:
+    faces[1] = (4, 5, 2, 1)
 mesh.from_pydata([(-2, -2, 0), (0, -2, 0), (0, 2, 0), (-2, 2, 0),
-                 (2, -2, 0), (2, 2, 0)], [], [(0, 1, 2, 3), (1, 4, 5, 2)])
+                 (2, -2, 0), (2, 2, 0)], [], faces)
 obj = bpy.data.objects.new("Painted surface", mesh)
 bpy.context.scene.collection.objects.link(obj)
 palette = {"red": ["220000", "440000", "660000", "880000", "aa0000", "cc0000", "ee0000"],

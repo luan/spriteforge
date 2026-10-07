@@ -130,6 +130,7 @@
   "outline": null,
   "fps": 12,
   "shading": "preserve",
+  "lighting": "studio",
   "supersample": 1,
   "cluster_materials": []
 }

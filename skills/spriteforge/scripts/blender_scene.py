@@ -9,6 +9,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from materials import linear_color
 from settings import DIRECTIONS, Settings
 from style import SHADE_STOPS
 
@@ -99,6 +100,14 @@ def snapshots(scene: bpy.types.Scene, collection: str | None) -> list[tuple[bpy.
                 raise ValueError(f"{original.name}/{modifier.name}: viewport and render settings must match for snapshot export")
         mesh = bpy.data.meshes.new_from_object(obj, preserve_all_data_layers=True, depsgraph=depsgraph)
         if mesh.vertices:
+            ancestor = owner
+            group = 0
+            while ancestor is not None:
+                if 'spriteforge_outline_id' in ancestor:
+                    group = ancestor['spriteforge_outline_id']
+                    break
+                ancestor = ancestor.parent
+            mesh['spriteforge_outline_id'] = group
             meshes.append((mesh, instance.matrix_world.copy()))
         else:
             bpy.data.meshes.remove(mesh)
@@ -140,6 +149,29 @@ def fit_canvas(scene, settings):
                for existing,lo,hi,anchor in zip(settings.size,low,high,settings.anchor))
     if max(size)>4096:raise ValueError('fitted canvas exceeds the native size limit')
     return replace(settings,size=size)
+
+
+def outline_pass(scene, output):
+    """Record visible asset identities with the beauty render, without shade edges."""
+    aov = scene.view_layers[0].aovs.add()
+    aov.name, aov.type = 'Spriteforge Groups', 'COLOR'
+    tree = bpy.data.node_groups.new('Spriteforge outline pass', 'CompositorNodeTree')
+    scene.compositing_node_group = tree
+    scene.render.use_compositing = True
+    tree.interface.new_socket(name='Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+    layers = tree.nodes.new('CompositorNodeRLayers')
+    layers.scene = scene
+    result = tree.nodes.new('NodeGroupOutput')
+    tree.links.new(layers.outputs['Image'], result.inputs['Image'])
+    file = tree.nodes.new('CompositorNodeOutputFile')
+    file.format.media_type, file.format.file_format = 'IMAGE', 'PNG'
+    file.format.color_mode, file.format.color_depth = 'RGB', '8'
+    file.save_as_render = False
+    file.directory = str(output)
+    file.file_output_items.clear()
+    file.file_output_items.new('RGBA', 'groups')
+    tree.links.new(layers.outputs['Spriteforge Groups'], file.inputs[0])
+    return file
 
 
 def render(source: Path, output: Path) -> None:
@@ -197,6 +229,9 @@ def render(source: Path, output: Path) -> None:
             light.rotation_euler = (-Vector(direction)).to_track_quat("-Z", "Y").to_euler()
             light.data.energy, light.data.color = energy, color
             light.data.angle = .12 if settings.lighting == "studio" else 0
+    masks = output / 'object-masks'
+    pass_file = outline_pass(scene, masks) if settings.object_outline else None
+    outline_materials, outline_groups = {}, {0: '000000'}
     materials = {}
     raw = output / "raw"
     raw.mkdir()
@@ -228,11 +263,35 @@ def render(source: Path, output: Path) -> None:
                             copy.materials.append(materials[name])
                 obj = bpy.data.objects.new("Pixel Proxy", copy)
                 scene.collection.objects.link(obj)
+                if pass_file:
+                    group = mesh['spriteforge_outline_id']
+                    if type(group) is not int or not 0 <= group <= 255:
+                        # Upgrade the identity pass when a scene needs >255 groups.
+                        raise ValueError('spriteforge_outline_id must be an integer from 0 to 255')
+                    color = bytes(((group*53)%256, (group*97)%256, (group*193)%256)).hex()
+                    outline_groups[group] = color
+                    obj.color = linear_color(color)
+                    for index, material in enumerate(list(copy.materials)):
+                        if material is None or not material.use_nodes:
+                            raise ValueError('object outline pass requires node-based materials')
+                        if material not in outline_materials:
+                            painted = material.copy()
+                            aov = painted.node_tree.nodes.new('ShaderNodeOutputAOV')
+                            aov.aov_name = 'Spriteforge Groups'
+                            info = painted.node_tree.nodes.new('ShaderNodeObjectInfo')
+                            painted.node_tree.links.new(info.outputs['Color'], aov.inputs['Color'])
+                            outline_materials[material] = painted
+                        copy.materials[index] = outline_materials[material]
                 proxies.append(obj)
             bpy.context.window.scene = scene
             scene.frame_set(frame)  # Shared material actions must follow the source sample too.
-            scene.render.filepath = str(raw / f"{direction}-{frame:04d}.png")
+            name = f'{direction}-{frame:04d}'
+            scene.render.filepath = str(raw / (name + '.png'))
+            if pass_file:
+                pass_file.file_name = name
             bpy.ops.render.render(write_still=True, scene=scene.name)
+            if pass_file:
+                (masks / (name+'groups.png')).rename(masks / (name+'.png'))
             if frame == settings.frames[0] and direction == settings.directions[0]:
                 scene["Pixel workflow"] = "Evaluated proxies; source scene retained; fixed scale/anchor; full RGB native export."
                 scene["Source sha256"] = source_hash
@@ -250,7 +309,7 @@ def render(source: Path, output: Path) -> None:
         "source_unchanged": True, "blender": bpy.app.version_string, "settings": "asset.json",
         "scene": "scene.blend", "size": settings.size, "pixels_per_unit": settings.pixels_per_unit,
         "anchor": settings.anchor, "pivot": settings.pivot, "fps": settings.fps,
-        "directions": settings.directions, "frames": settings.frames, "evaluated_mesh_counts": mesh_counts}, indent=2) + "\n")
+        "directions": settings.directions, "frames": settings.frames, "evaluated_mesh_counts": mesh_counts, "outline_groups": outline_groups}, indent=2) + "\n")
 
 
 def main() -> None:

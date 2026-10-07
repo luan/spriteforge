@@ -60,7 +60,37 @@ def cohere_shading(image: Image.Image, palettes: list[set[tuple[int, int, int]]]
     return coherent
 
 
-def finish_image(image: Image.Image, settings: Settings) -> Image.Image:
+def exterior_mask(mask: Image.Image) -> Image.Image:
+    """Fill enclosed gaps for contour placement, without filling the beauty image."""
+    padded = Image.new('L', (mask.width+2, mask.height+2))
+    padded.paste(mask, (1,1))
+    ImageDraw.floodfill(padded, (0,0), 128)
+    return padded.point(lambda value: 0 if value==128 else 255).crop((1,1,mask.width+1,mask.height+1))
+
+
+def outline_objects(image: Image.Image, groups: Image.Image, color: str) -> Image.Image:
+    """One native pixel inside each visible asset's external silhouette."""
+    if groups.mode not in ('L','P'):
+        raise ValueError('object mask must contain indexed asset identities')
+    if groups.size != image.size:
+        raise ValueError('object mask must match the native image size')
+    result = image.copy()
+    for identity in set(groups.get_flattened_data()) - {0}:
+        mask = groups.point(lambda value: 255 if value==identity else 0, 'L')
+        box = mask.getbbox()
+        if box is None:
+            continue
+        left,top,right,bottom = box
+        box = (max(0,left-1),max(0,top-1),min(image.width,right+1),min(image.height,bottom+1))
+        visible = mask.crop(box)
+        filled = exterior_mask(visible)
+        edge = ImageChops.subtract(filled, filled.filter(ImageFilter.MinFilter(3)))
+        edge = ImageChops.multiply(edge, visible)
+        result.paste((*bytes.fromhex(color),255), box, edge)
+    return result
+
+
+def finish_image(image: Image.Image, settings: Settings, object_mask: Image.Image | None = None) -> Image.Image:
     image = image.convert('RGBA')
     factor = settings.supersample if image.size != settings.size else 1
     expected = tuple(v * factor for v in settings.size)
@@ -77,9 +107,15 @@ def finish_image(image: Image.Image, settings: Settings) -> Image.Image:
                  if name not in settings.cluster_materials for c in ramp}
     result = cohere_shading(result,[{tuple(bytes.fromhex(c)) for c in settings.palette[name]}-protected
                                    for name in settings.cluster_materials])
+    if settings.object_outline:
+        if object_mask is None:
+            raise ValueError('object outlines require the visible asset identity pass')
+        result = outline_objects(result, object_mask, settings.object_outline)
     if settings.outline:
         contour = Image.new("RGBA", settings.size, (*bytes.fromhex(settings.outline), 0))
-        contour.putalpha(alpha.filter(ImageFilter.MaxFilter(3)))
+        filled = exterior_mask(alpha)
+        expanded = filled.filter(ImageFilter.MaxFilter(3))
+        contour.putalpha(ImageChops.lighter(alpha, ImageChops.multiply(expanded, ImageChops.invert(filled))))
         contour.alpha_composite(result)
         result = contour
     return result
@@ -120,10 +156,21 @@ def finish(directory: Path) -> None:
     preview_frames = []
     records = []
     images = {}
+    # Indexed colors label assets in the auxiliary pass; beauty RGB is unrestricted.
+    identity_palette = Image.new('P',(1,1))
+    colors = [0]*768
+    for identity,color in manifest.get('outline_groups',{}).items():
+        start = int(identity)*3
+        colors[start:start+3] = bytes.fromhex(color)
+    identity_palette.putpalette(colors)
     for row, direction in enumerate(settings.directions):
         for column, frame in enumerate(settings.frames):
             name = f"{direction}-{frame:04d}.png"
-            image = finish_image(Image.open(directory / "raw" / name), settings)
+            mask = None
+            if settings.object_outline:
+                mask = Image.open(directory/'object-masks'/name).convert('RGB').quantize(
+                    palette=identity_palette, dither=Image.Dither.NONE)
+            image = finish_image(Image.open(directory / "raw" / name), settings, mask)
             record = validate_image(image, settings)
             image.save(sprites / name)
             images[direction, frame] = image

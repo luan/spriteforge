@@ -38,6 +38,8 @@ class PixelContractTests(unittest.TestCase):
         cases += [{'cluster_materials':['missing']}, {'cluster_materials':'cloth'}]
         cases += [{'size':[4096,4096],'supersample':4}]
         cases += [{'lighting':'unknown'}, {'lighting':'studio','shear':[.3,.8]}]
+        cases += [{'object_outline':True}, {'object_outline':'#23281d'},
+                  {'object_outline':'23281d','supersample':2}]
         for changes in cases:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.load({**self.config, **changes})
@@ -88,6 +90,34 @@ class PixelContractTests(unittest.TestCase):
         image.putpixel((8, 9), (80, 120, 45, 0))
         with self.assertRaises(ValueError):
             validate_image(finish_image(image, settings), settings)
+
+    def test_scene_contours_preserve_terrain_holes_and_interior_colors(self):
+        settings = self.load({**self.config, 'opaque':True, 'outline':None,
+                              'object_outline':'23281d'})
+        image = Image.new('RGBA', settings.size, (100,160,70,255))
+        groups = Image.new('L', settings.size)
+        groups.paste(1, (3,3,13,17))
+        groups.paste(0, (7,7,9,10))
+        groups.paste(2, (10,11,14,16))
+        image.putpixel((6,6), (241,173,83,255))
+        result = finish_image(image, settings, groups)
+        self.assertEqual((35,40,29,255), result.getpixel((3,8)))
+        self.assertEqual((35,40,29,255), result.getpixel((13,13)))
+        self.assertEqual((241,173,83,255), result.getpixel((6,6)))
+        for point in [(0,0),(7,8),(6,8)]:
+            self.assertEqual(image.getpixel(point), result.getpixel(point))
+        self.assertEqual(image.getchannel('A').tobytes(),result.getchannel('A').tobytes())
+        with self.assertRaises(ValueError):
+            finish_image(image, settings)
+
+    def test_sprite_outline_does_not_blacken_enclosed_leaf_gaps(self):
+        settings = self.load(self.config)
+        image = Image.new('RGBA',settings.size)
+        image.paste((80,140,40,255),(4,4,12,16))
+        image.putpixel((8,9),(0,0,0,0))
+        result = finish_image(image,settings)
+        self.assertEqual(0,result.getpixel((8,9))[3])
+        self.assertEqual((36,34,32,255),result.getpixel((3,8)))
 
     def test_coverage_integrates_subpixel_detail_without_phase_flicker(self):
         settings = self.load({**self.config,'outline':None,'supersample':4})

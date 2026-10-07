@@ -39,6 +39,7 @@ class Settings:
     cluster_materials: tuple[str, ...] = ()
     lighting: str = "key"
     opaque: bool = False
+    object_outline: str | None = None
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -84,6 +85,11 @@ class Settings:
         light = vector(data.get("light", [-0.5, -0.65, 1]), 3, "light")
         if not any(light):
             raise ValueError("light must be nonzero")
+        object_outline = data.get('object_outline')
+        if object_outline is not None:
+            object_outline = hexcolor(object_outline)
+        if object_outline and data.get('supersample', 1) != 1:
+            raise ValueError('object outlines require native sampling')
         shading = data.get("shading", "preserve")
         if shading not in ("bands", "preserve"):
             raise ValueError("shading must be bands or preserve")
@@ -122,7 +128,7 @@ class Settings:
         return cls(tuple(int(v) for v in size), density, palette, collection,
                    tuple(frames), tuple(directions), vector(data.get("pivot", [0, 0, 0]), 3, "pivot"),
                    anchor, shear,
-                   light, outline, shading, fps, tileable, supersample, tuple(clusters), lighting, opaque)
+                   light, outline, shading, fps, tileable, supersample, tuple(clusters), lighting, opaque, object_outline)
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self), indent=2) + "\n")

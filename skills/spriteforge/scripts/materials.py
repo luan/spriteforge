@@ -1,4 +1,4 @@
-"""Unlit UV paint: authored clusters survive projection and pose changes."""
+"""Packed UV surface fields for painted and physically lit sprites."""
 from pathlib import Path
 import bpy
 
@@ -57,16 +57,14 @@ def lit_material(name: str, color: str, texture: Path | None = None,
     # A small material-colored fill keeps dark facings readable without banding.
     surface.inputs["Emission Color"].default_value = linear_color(color)
     surface.inputs["Emission Strength"].default_value = .04
-    occlusion = nodes.new("ShaderNodeAmbientOcclusion")
-    occlusion.inputs["Distance"].default_value = .12
-    occlusion.inputs["Color"].default_value = linear_color(color)
-    links.new(occlusion.outputs["Color"], surface.inputs["Base Color"])
-    links.new(occlusion.outputs["Color"], surface.inputs["Emission Color"])
+    # Live screen-space AO produces dark pinholes on moving native-size meshes.
+    # Use geometric shadows; any extra occlusion belongs in stable UV paint.
     if texture is not None:
         paint = nodes.new("ShaderNodeTexImage")
         paint.image = bpy.data.images.load(str(texture.resolve()), check_existing=True)
         paint.image.pack()
         paint.interpolation = "Closest"
-        links.new(paint.outputs["Color"], occlusion.inputs["Color"])
+        links.new(paint.outputs["Color"], surface.inputs["Base Color"])
+        links.new(paint.outputs["Color"], surface.inputs["Emission Color"])
         links.new(paint.outputs["Alpha"], surface.inputs["Alpha"])
     return material

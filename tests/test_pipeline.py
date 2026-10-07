@@ -33,7 +33,7 @@ class PixelContractTests(unittest.TestCase):
         cases += [{"frames": [2, 1]}, {"frames": [1, 1]}, {"directions": ["../escape"]},
                   {"size": [0, 16]}, {"size": [16.5, 20]}, {"anchor": [0.5, 2]},
                   {"palette": {"cloth": ["#112233"]}}, {"tileable": True},
-                  {"light": [0, 0, 0]}, {"unexpected": True}]
+                  {"light": [0, 0, 0]}, {"unexpected": True}, {"opaque": True}, {"opaque": 1}]
         cases += [{'supersample':v} for v in (0,9,True,1.5)]
         cases += [{'cluster_materials':['missing']}, {'cluster_materials':'cloth'}]
         cases += [{'size':[4096,4096],'supersample':4}]
@@ -79,6 +79,15 @@ class PixelContractTests(unittest.TestCase):
                 image.putpixel(position, (17, 34, 51, 255))
             with self.subTest(position=position), self.assertRaises(ValueError):
                 validate_image(finish_image(image, settings), settings)
+
+    def test_opaque_ground_accepts_unique_edges_and_rejects_holes(self):
+        settings = self.load({**self.config, "opaque": True, "outline": None})
+        image = Image.new("RGBA", settings.size, (80, 120, 45, 255))
+        image.putpixel((0, 0), (130, 90, 60, 255))
+        validate_image(finish_image(image, settings), settings)
+        image.putpixel((8, 9), (80, 120, 45, 0))
+        with self.assertRaises(ValueError):
+            validate_image(finish_image(image, settings), settings)
 
     def test_coverage_integrates_subpixel_detail_without_phase_flicker(self):
         settings = self.load({**self.config,'outline':None,'supersample':4})

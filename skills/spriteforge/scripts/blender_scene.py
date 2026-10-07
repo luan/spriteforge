@@ -148,7 +148,9 @@ def render(source: Path, output: Path) -> None:
     source_hash = sha256(source)
     scene = bpy.data.scenes.new("Pixel Render")
     scene.render.engine = "BLENDER_EEVEE"
-    scene.eevee.taa_render_samples = 1
+    # Accumulate lighting/shadow samples without enlarging the native pixel grid.
+    scene.eevee.taa_render_samples = 32 if settings.lighting == "studio" else 1
+    scene.render.filter_size = .01
     scene.render.resolution_x, scene.render.resolution_y = [v * settings.supersample for v in settings.size]
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True

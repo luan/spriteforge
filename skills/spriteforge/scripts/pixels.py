@@ -95,14 +95,15 @@ def validate_image(image: Image.Image, settings: Settings) -> dict:
         if pixel[3] not in (0, 255):
             raise ValueError("sprite contains invalid alpha")
     width, height = image.size
-    if settings.tileable:
+    if settings.tileable or settings.opaque:
         if image.getchannel("A").getextrema() != (255, 255):
-            raise ValueError("tileable ground must cover the full cell")
+            raise ValueError("opaque ground must cover the full cell")
+    if settings.tileable:
         horizontal = ImageChops.difference(image.crop((0, 0, 1, height)), image.crop((width - 1, 0, width, height)))
         vertical = ImageChops.difference(image.crop((0, 0, width, 1)), image.crop((0, height - 1, width, height)))
         if horizontal.convert("RGB").getbbox() or vertical.convert("RGB").getbbox():
             raise ValueError("tileable ground has mismatched opposite edges")
-    elif box[0] < 2 or box[1] < 2 or box[2] > width - 2 or box[3] > height - 2:
+    elif not settings.opaque and (box[0] < 2 or box[1] < 2 or box[2] > width - 2 or box[3] > height - 2):
         raise ValueError("sprite reaches the crop margin; enlarge the canvas or adjust its anchor")
     return {"bounds": box, "tileable": settings.tileable}
 

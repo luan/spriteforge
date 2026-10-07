@@ -38,6 +38,7 @@ class Settings:
     supersample: int = 1
     cluster_materials: tuple[str, ...] = ()
     lighting: str = "key"
+    opaque: bool = False
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -96,6 +97,11 @@ class Settings:
             raise ValueError("tileable must be a boolean")
         if tileable and outline is not None:
             raise ValueError("tileable assets require outline: null")
+        opaque = data.get("opaque", False)
+        if type(opaque) is not bool:
+            raise ValueError("opaque must be a boolean")
+        if opaque and outline is not None:
+            raise ValueError("opaque assets require outline: null")
         supersample = data.get('supersample', 1)
         if type(supersample) is not int or not 1 <= supersample <= 8:
             raise ValueError('supersample must be an integer from 1 to 8')
@@ -116,7 +122,7 @@ class Settings:
         return cls(tuple(int(v) for v in size), density, palette, collection,
                    tuple(frames), tuple(directions), vector(data.get("pivot", [0, 0, 0]), 3, "pivot"),
                    anchor, shear,
-                   light, outline, shading, fps, tileable, supersample, tuple(clusters), lighting)
+                   light, outline, shading, fps, tileable, supersample, tuple(clusters), lighting, opaque)
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self), indent=2) + "\n")

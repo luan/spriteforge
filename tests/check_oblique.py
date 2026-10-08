@@ -35,5 +35,7 @@ with tempfile.TemporaryDirectory(prefix='spriteforge oblique ') as temporary:
         for x in range(25,40):
             stripe_color=(0,0,255,255) if (x-32)%2 else (255,0,0,255)
             if image.getpixel((x,48))!=stripe_color:raise ValueError(f'native pixels blended at {x}: {image.getpixel((x,48))}')
+        if image.getpixel((12,48))!=(0,0,255,255) or image.getpixel((20,48))[3]!=0:
+            raise ValueError('authored paint changed its color or lost cutout alpha')
     if hashlib.sha256(source.read_bytes()).hexdigest()!=digest:raise ValueError('source changed')
-print('Passed: diagonal height, square ground, undeformed world normals, unblended native pixels, source preservation')
+print('Passed: diagonal height, square ground, undeformed world normals, unblended native pixels, paint alpha, source preservation')

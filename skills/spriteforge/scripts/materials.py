@@ -44,8 +44,13 @@ def pixel_material(name: str, shades: list[str] | None = None, texture: Path | N
 
 
 def lit_material(name: str, color: str, texture: Path | None = None,
-                 roughness: float = .8, metallic: float = 0) -> bpy.types.Material:
-    """Continuous material shading; UV fields describe surfaces rather than views."""
+                 roughness: float = .8, metallic: float = 0,
+                 paint_strength: float = 0) -> bpy.types.Material:
+    """Light albedo or blend authored UV form paint with a physical surface."""
+    if not 0 <= paint_strength <= 1:
+        raise ValueError('paint_strength must be between zero and one')
+    if paint_strength and texture is None:
+        raise ValueError('authored paint requires a texture')
     material = bpy.data.materials.new(name)
     material.use_nodes = True
     nodes, links = material.node_tree.nodes, material.node_tree.links
@@ -67,4 +72,19 @@ def lit_material(name: str, color: str, texture: Path | None = None,
         links.new(paint.outputs["Color"], surface.inputs["Base Color"])
         links.new(paint.outputs["Color"], surface.inputs["Emission Color"])
         links.new(paint.outputs["Alpha"], surface.inputs["Alpha"])
+        if paint_strength:
+            # Authored fold lighting stays in the map; the physical fraction
+            # adds form and intersections without relighting the paint fully.
+            emission = nodes.new('ShaderNodeEmission')
+            links.new(paint.outputs['Color'], emission.inputs['Color'])
+            transparent = nodes.new('ShaderNodeBsdfTransparent')
+            painted = nodes.new('ShaderNodeMixShader')
+            links.new(paint.outputs['Alpha'], painted.inputs[0])
+            links.new(transparent.outputs[0], painted.inputs[1])
+            links.new(emission.outputs[0], painted.inputs[2])
+            mix = nodes.new('ShaderNodeMixShader')
+            mix.inputs[0].default_value = paint_strength
+            links.new(surface.outputs['BSDF'], mix.inputs[1])
+            links.new(painted.outputs[0], mix.inputs[2])
+            links.new(mix.outputs[0], nodes.get('Material Output').inputs['Surface'])
     return material

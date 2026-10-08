@@ -6,13 +6,20 @@ import bpy
 
 out=Path(sys.argv[sys.argv.index('--')+1])
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'skills/spriteforge/scripts'))
-from materials import pixel_material
+from materials import pixel_material,lit_material
 
 bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 for x in range(-1,2):
     for y in range(-1,2):
         bpy.ops.mesh.primitive_plane_add(size=1,location=(x,y,0))
         bpy.context.object.data.materials.append(pixel_material('Grid',['506040' if (x+y)%2 else '809060']))
+        if (x,y)==(-1,-1):
+            image=bpy.data.images.new('Painted cutout',32,2,alpha=True)
+            image.pixels=[channel for row in range(2) for column in range(32)
+                          for channel in (0,0,1,1 if column<16 else 0)]
+            image.filepath_raw=str(out/'cutout.png');image.file_format='PNG';image.save()
+            bpy.context.object.data.materials.clear()
+            bpy.context.object.data.materials.append(lit_material('Painted cutout','ffffff',out/'cutout.png',paint_strength=1))
         if (x,y)==(0,-1):
             material=bpy.data.materials.new('Native pixel stripes');material.use_nodes=True
             nodes=material.node_tree.nodes;links=material.node_tree.links;nodes.clear()

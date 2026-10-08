@@ -23,7 +23,8 @@ for frame in range(scene.frame_start, scene.frame_end + 2):
                          "toe": list(rig.matrix_world @ rig.pose.bones["toe." + side].tail)}
                  for side in ["L", "R"]},
         "ground_min": min((o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices),
-        "quaternions": {b.name: list(b.rotation_quaternion) for b in rig.pose.bones}})
+        "quaternions": {b.name: list(b.rotation_quaternion) for b in rig.pose.bones},
+        "locations": {b.name: list(b.location) for b in rig.pose.bones}})
 args.output.write_text(json.dumps({"fps": scene.render.fps, "range": [scene.frame_start, scene.frame_end],
                                   "action": dict(rig.animation_data.action.items()),
                                   "frames": frames}, indent=2) + "\n")

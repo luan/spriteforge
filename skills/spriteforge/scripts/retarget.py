@@ -69,10 +69,12 @@ def bake(target, motion, source_action, mapping, fps):
         else:
             motion.animation_data.action = source_action
             motion.animation_data.action_slot = source_action.slots[0]
-            # A rounded sprite sample count must still include the exact closing
-            # pose or one-shot endpoint when the source duration is indivisible.
+            # Close loops on their first pose; imported end keys may differ.
+            # One-shots retain the exact endpoint despite rounded sample counts.
             intervals = count if loop else max(1, count - 1)
             source_frame = start + (end - start) * frame / intervals
+            if loop and frame == count:
+                source_frame = start
             bpy.context.scene.frame_set(math.floor(source_frame), subframe=source_frame % 1)
         posed = {}
         for bone in sorted(target.pose.bones, key=lambda b: len(b.parent_recursive)):

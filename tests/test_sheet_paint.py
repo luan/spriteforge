@@ -1,0 +1,79 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["Pillow>=12.1,<13"]
+# ///
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from PIL import Image
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / 'skills/spriteforge/scripts/sheet_paint.py'
+
+
+class SheetPaintTests(unittest.TestCase):
+    def test_finish_preserves_cells_and_animation_in_both_layouts(self):
+        for columns in (3, 2):
+            with self.subTest(columns=columns), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                cell = (8, 8)
+                directions = ['south', 'west']
+                frames = [1, 3, 5]
+                size = (cell[0]*columns, cell[1]*(6//columns))
+                sheet = Image.new('RGBA', size)
+                tiles = []
+                for index in range(6):
+                    tile = Image.new('RGBA', cell)
+                    tile.paste((30+index*30, 83, 147, 255), (1, 2, 7, 7))
+                    tile.putpixel((2, 3), (255, index*20, 0, 255))
+                    tiles.append(tile)
+                    sheet.paste(tile, ((index % columns)*8, (index//columns)*8))
+                sheet.save(root/'paint.png')
+                sheet.getchannel('A').save(root/'geometry-mask.png')
+                metadata = {'cell': cell, 'directions': directions,
+                            'source_frames': frames, 'output_native_size': size,
+                            'preview_fps': 6}
+                if columns == 2:
+                    metadata.update(columns=columns, rows=3)
+                (root/'sheet.json').write_text(json.dumps(metadata))
+                output = root/'finished'
+                result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                    '--prepared', str(root), '--painted', str(root/'paint.png'),
+                    '--output', str(output)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for index, tile in enumerate(tiles):
+                    name = f'{directions[index//3]}-{frames[index % 3]:04d}.png'
+                    with Image.open(output/'sprites'/name) as exported:
+                        self.assertEqual(exported.convert('RGBA').tobytes(), tile.tobytes())
+                report = json.loads((output/'boundary-report.json').read_text())
+                self.assertEqual([entry['silhouette_iou'] for entry in report], [1]*6)
+                with Image.open(output/'preview.webp') as preview:
+                    self.assertEqual(preview.n_frames, 3)
+                    for phase in range(3):
+                        preview.seek(phase)
+                        actual = preview.convert('RGBA')
+                        self.assertEqual(actual.crop((0, 0, 8, 8)).tobytes(), tiles[phase].tobytes())
+                        self.assertEqual(actual.crop((8, 0, 16, 8)).tobytes(), tiles[phase+3].tobytes())
+
+    def test_changed_aspect_is_rejected_before_export(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'sheet.json').write_text(json.dumps({
+                'cell': [8, 8], 'source_frames': [1], 'output_native_size': [8, 8]}))
+            Image.new('RGBA', (16, 8), 'red').save(root/'paint.png')
+            output = root/'finished'
+            result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                '--prepared', str(root), '--painted', str(root/'paint.png'),
+                '--output', str(output)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('canvas aspect ratio changed', result.stderr)
+            self.assertFalse(output.exists())
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -61,8 +61,20 @@ def prepare(args: argparse.Namespace) -> None:
                         'render', '--source', str(root/'clay.blend'), '--config', str(root/'clay.json'),
                         '--output', str(root/'render'), '--blender', args.blender],
                        check=True, stdout=log, stderr=subprocess.STDOUT)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise ValueError('original model changed during clay preparation')
+    print(json.dumps(pack_sheet(root, settings.directions, frames, settings.fps/interval, source, digest)))
+
+
+def cell_origin(direction: int, phase: int, phases: int, columns: int, cell: tuple[int, int]) -> tuple[int, int]:
+    index = direction*phases+phase
+    return (index % columns)*cell[0], (index // columns)*cell[1]
+
+
+def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...], fps: float, source: Path, digest: str) -> dict:
+    from PIL import Image
     boxes = []
-    for direction in settings.directions:
+    for direction in directions:
         for frame in frames:
             with Image.open(root/'render/raw'/f'{direction}-{frame:04d}.png') as im:
                 boxes.append(im.getchannel('A').point(lambda a: 255 if a >= 128 else 0).getbbox())
@@ -73,27 +85,30 @@ def prepare(args: argparse.Namespace) -> None:
     width = math.ceil((math.ceil(max(b[2] for b in boxes)/4)+4-left)/8)*8
     height = math.ceil((math.ceil(max(b[3] for b in boxes)/4)+4-top)/8)*8
     crop = (left, top, left+width, top+height)
-    size = (width*len(frames), height*len(settings.directions))
+    count = len(frames)*len(directions)
+    columns = min(count, 8, max(1, 2**round(math.log2(math.sqrt(count*height/width)))))
+    rows = math.ceil(count/columns)
+    size = (width*columns, height*rows)
     sheet = Image.new('RGBA', tuple(v*4 for v in size))
     native = Image.new('RGBA', size)
-    for row, direction in enumerate(settings.directions):
+    for row, direction in enumerate(directions):
         for column, frame in enumerate(frames):
+            x, y = cell_origin(row, column, len(frames), columns, (width, height))
             name = f'{direction}-{frame:04d}.png'
             with Image.open(root/'render/raw'/name) as im:
-                sheet.paste(im.crop(tuple(v*4 for v in crop)), (column*width*4, row*height*4))
+                sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
             with Image.open(root/'render/sprites'/name) as im:
-                native.paste(im.crop(crop), (column*width, row*height))
+                native.paste(im.crop(crop), (x, y))
     sheet.save(root/'clay-sheet.png')
     native.save(root/'clay-native.png')
     native.getchannel('A').save(root/'geometry-mask.png')
-    metadata = {'directions': list(settings.directions), 'source_frames': list(frames),
+    metadata = {'directions': list(directions), 'source_frames': list(frames),
                 'crop': list(crop), 'cell': [width, height], 'paint_scale': 4,
+                'columns': columns, 'rows': rows,
                 'input_size': list(sheet.size), 'output_native_size': list(size),
-                'preview_fps': settings.fps/interval, 'source': str(source), 'source_sha256': digest}
-    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
-        raise ValueError('original model changed during clay preparation')
+                'preview_fps': fps, 'source': str(source), 'source_sha256': digest}
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
-    print(json.dumps(metadata))
+    return metadata
 
 
 def finish(args: argparse.Namespace) -> None:
@@ -101,6 +116,8 @@ def finish(args: argparse.Namespace) -> None:
     metadata = json.loads((args.prepared/'sheet.json').read_text())
     width, height = metadata['cell']
     size = tuple(metadata['output_native_size'])
+    phases = len(metadata['source_frames'])
+    columns = metadata.get('columns', phases)
     with Image.open(args.painted) as raw:
         if abs(raw.width/raw.height/(size[0]/size[1])-1) > .01:
             raise ValueError('paint canvas aspect ratio changed; repair the sheet layout before exporting')
@@ -116,7 +133,8 @@ def finish(args: argparse.Namespace) -> None:
     overlay = paint.copy()
     for row, direction in enumerate(metadata['directions']):
         for column, frame in enumerate(metadata['source_frames']):
-            box = (column*width, row*height, (column+1)*width, (row+1)*height)
+            x, y = cell_origin(row, column, phases, columns, (width, height))
+            box = (x, y, x+width, y+height)
             tile = paint.crop(box)
             actual = tile.getchannel('A')
             target = mask.crop(box)
@@ -133,15 +151,15 @@ def finish(args: argparse.Namespace) -> None:
             tile.save(root/'sprites'/f'{direction}-{frame:04d}.png')
             tile.paste((255, 55, 55, 255), (0, 0, width, height), extra)
             tile.paste((0, 220, 255, 255), (0, 0, width, height), missing)
-            overlay.paste(tile, (column*width, row*height))
+            overlay.paste(tile, (x, y))
     paint.save(root/'painted-native.png')
     overlay.save(root/'silhouette-drift.png')
     animation = []
     for column in range(len(metadata['source_frames'])):
         preview = Image.new('RGBA', (width*len(metadata['directions']), height))
         for row in range(len(metadata['directions'])):
-            preview.paste(paint.crop((column*width, row*height, (column+1)*width, (row+1)*height)),
-                          (row*width, 0))
+            x, y = cell_origin(row, column, phases, columns, (width, height))
+            preview.paste(paint.crop((x, y, x+width, y+height)), (row*width, 0))
         animation.append(preview)
     animation[0].save(root/'preview.webp', save_all=True, append_images=animation[1:],
                       duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)

@@ -164,6 +164,11 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                 'columns': columns, 'rows': rows,
                 'input_size': list(sheet.size), 'output_native_size': list(size),
                 'preview_fps': fps, 'source': str(source), 'source_sha256': digest}
+    render = json.loads((root/'render/manifest.json').read_text())
+    metadata.update(pixels_per_unit=render['pixels_per_unit'],
+                    anchor=[(a*s-offset)/extent for a, s, offset, extent in
+                            zip(render['anchor'], render['size'], crop[:2], (width, height))],
+                    pivot=render['pivot'], shear=render['shear'])
     if surface_sheet is not None:
         surface_sheet.save(root/'surface-sheet.png')
         metadata['surface_guide'] = 'surface-sheet.png'
@@ -186,6 +191,15 @@ def finish(args: argparse.Namespace) -> None:
     mask = Image.open(args.prepared/'geometry-mask.png').convert('L')
     if mask.size != size:
         raise ValueError('geometry mask does not match sheet metadata')
+    if args.config:
+        from settings import Settings
+        config = Settings.load(args.config)
+        metadata.update(pixels_per_unit=config.pixels_per_unit,
+                        anchor=[(a*s-offset)/extent for a, s, offset, extent in
+                                zip(config.anchor, config.size, metadata['crop'][:2], (width, height))],
+                        pivot=config.pivot, shear=config.shear)
+    if 'anchor' not in metadata or 'pixels_per_unit' not in metadata:
+        raise ValueError('sheet lacks placement metadata; rerun prepare or supply --config with the original render profile')
     raw_paint = paint.copy()
     if args.clip_to_geometry:
         # Remove overshoot; never invent coverage where the paint missed geometry.
@@ -196,6 +210,8 @@ def finish(args: argparse.Namespace) -> None:
     (root/'sprites').mkdir()
     report = []
     overlay = raw_paint.copy()
+    # Runtime atlases use one row per facing, independent of the paint grid.
+    atlas = Image.new('RGBA', (width*phases, height*len(metadata['directions'])))
     for row, direction in enumerate(metadata['directions']):
         for column, frame in enumerate(metadata['source_frames']):
             x, y = cell_origin(row, column, phases, columns, (width, height))
@@ -216,10 +232,20 @@ def finish(args: argparse.Namespace) -> None:
                            'missing_pixels': missing.histogram()[255],
                            'exported_outside_pixels': ImageChops.subtract(tile.getchannel('A'), target).histogram()[255]})
             tile.save(root/'sprites'/f'{direction}-{frame:04d}.png')
+            atlas.paste(tile, (column*width, row*height))
             raw_tile.paste((255, 55, 55, 255), (0, 0, width, height), extra)
             raw_tile.paste((0, 220, 255, 255), (0, 0, width, height), missing)
             overlay.paste(raw_tile, (x, y))
     paint.save(root/'painted-native.png')
+    atlas.save(root/'atlas.png')
+    manifest = {key: metadata[key] for key in ('directions', 'anchor', 'pixels_per_unit')}
+    manifest.update(size=[width, height], frames=metadata['source_frames'],
+                    fps=metadata['preview_fps'], atlas='atlas.png',
+                    sheet='sheet.json', visual_acceptance='unreviewed')
+    for key in ('source', 'source_sha256', 'pivot', 'shear'):
+        if key in metadata:
+            manifest[key] = metadata[key]
+    (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     overlay.save(root/'silhouette-drift.png')
     animation = []
     for column in range(len(metadata['source_frames'])):
@@ -263,6 +289,8 @@ def main() -> None:
     finish_parser.add_argument('--prepared', type=Path, required=True)
     finish_parser.add_argument('--painted', type=Path, required=True)
     finish_parser.add_argument('--output', type=Path, required=True)
+    finish_parser.add_argument('--config', type=Path,
+                               help='original render profile for older sheets without placement metadata')
     finish_parser.add_argument('--clip-to-geometry', action='store_true',
                                help='remove paint outside the real model mask; retain missing coverage and raw drift evidence')
     args = parser.parse_args()

@@ -45,6 +45,9 @@ class SheetPrepareTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(model.read_bytes()).hexdigest(), digest)
                 metadata = json.loads((prepared/'sheet.json').read_text())
                 self.assertEqual(metadata['source_sha256'], digest)
+                self.assertEqual(metadata['pixels_per_unit'], 20)
+                self.assertEqual(metadata['anchor'], [(a*s-offset)/extent for a, s, offset, extent in
+                    zip(config['anchor'], config['size'], metadata['crop'][:2], metadata['cell'])])
                 self.assertEqual(json.loads((prepared/'clay.json').read_text())['opaque'], opaque)
                 with Image.open(prepared/'clay-sheet.png') as clay, Image.open(prepared/'surface-sheet.png') as color:
                     self.assertEqual(clay.size, color.size)

@@ -37,7 +37,7 @@ class SheetPaintTests(unittest.TestCase):
                 sheet.getchannel('A').save(root/'geometry-mask.png')
                 metadata = {'cell': cell, 'directions': directions,
                             'source_frames': frames, 'output_native_size': size,
-                            'preview_fps': 6}
+                            'preview_fps': 6, 'anchor': [.25, .75], 'pixels_per_unit': 24}
                 if columns == 2:
                     metadata.update(columns=columns, rows=3)
                 (root/'sheet.json').write_text(json.dumps(metadata))
@@ -50,6 +50,30 @@ class SheetPaintTests(unittest.TestCase):
                     name = f'{directions[index//3]}-{frames[index % 3]:04d}.png'
                     with Image.open(output/'sprites'/name) as exported:
                         self.assertEqual(exported.convert('RGBA').tobytes(), tile.tobytes())
+                manifest = json.loads((output/'manifest.json').read_text())
+                self.assertEqual(manifest['anchor'], [.25, .75])
+                self.assertEqual(manifest['pixels_per_unit'], 24)
+                self.assertEqual(manifest['fps'], 6)
+                self.assertEqual(manifest['frames'], frames)
+                self.assertEqual(manifest['directions'], directions)
+                with Image.open(output/manifest['atlas']) as atlas:
+                    for index, tile in enumerate(tiles):
+                        x, y = (index % 3)*8, (index//3)*8
+                        self.assertEqual(atlas.crop((x, y, x+8, y+8)).tobytes(), tile.tobytes())
+                composition = root/'scene.json'
+                composition.write_text(json.dumps({'size': [32, 24], 'frames': 3, 'fps': 6,
+                    'background': '#34373d', 'assets': {'entity': 'finished'},
+                    'instances': [{'asset': 'entity', 'direction': 'west', 'position': [10, 12]}]}))
+                recording = root/'recording'
+                composed = subprocess.run([sys.executable, str(SCRIPT.with_name('compose.py')),
+                    '--config', str(composition), '--output', str(recording), '--no-gif'],
+                    capture_output=True, text=True)
+                self.assertEqual(composed.returncode, 0, composed.stderr)
+                for phase in range(3):
+                    expected = Image.new('RGBA', (32, 24), '#34373d')
+                    expected.alpha_composite(tiles[phase+3], (8, 6))
+                    with Image.open(recording/'frames'/f'{phase:04d}.png') as actual:
+                        self.assertEqual(actual.tobytes(), expected.tobytes())
                 report = json.loads((output/'boundary-report.json').read_text())
                 self.assertEqual([entry['silhouette_iou'] for entry in report], [1]*6)
                 with Image.open(output/'preview.webp') as preview:
@@ -59,6 +83,30 @@ class SheetPaintTests(unittest.TestCase):
                         actual = preview.convert('RGBA')
                         self.assertEqual(actual.crop((0, 0, 8, 8)).tobytes(), tiles[phase].tobytes())
                         self.assertEqual(actual.crop((8, 0, 16, 8)).tobytes(), tiles[phase+3].tobytes())
+
+    def test_legacy_sheet_requires_original_profile_and_preserves_cropped_anchor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            Image.new('RGBA', (8, 8), 'red').save(root/'paint.png')
+            Image.new('L', (8, 8), 255).save(root/'geometry-mask.png')
+            (root/'sheet.json').write_text(json.dumps({
+                'cell': [8, 8], 'crop': [10, 3, 18, 11], 'directions': ['south'],
+                'source_frames': [1], 'output_native_size': [8, 8], 'preview_fps': 6}))
+            output = root/'finished'
+            command = [sys.executable, str(SCRIPT), 'finish', '--prepared', str(root),
+                       '--painted', str(root/'paint.png'), '--output', str(output)]
+            rejected = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('sheet lacks placement metadata', rejected.stderr)
+            self.assertFalse(output.exists())
+            profile = root/'asset.json'
+            profile.write_text(json.dumps({'size': [24, 20], 'anchor': [.5, .75],
+                                          'pixels_per_unit': 24, 'shading': 'preserve'}))
+            finished = subprocess.run(command+['--config', str(profile)], capture_output=True, text=True)
+            self.assertEqual(finished.returncode, 0, finished.stderr)
+            manifest = json.loads((output/'manifest.json').read_text())
+            self.assertEqual(manifest['anchor'], [.25, 1.5])
+            self.assertEqual(manifest['pixels_per_unit'], 24)
 
     def test_changed_aspect_is_rejected_before_export(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -85,7 +133,8 @@ class SheetPaintTests(unittest.TestCase):
             paint.save(root/'paint.png')
             (root/'sheet.json').write_text(json.dumps({
                 'cell': [8, 8], 'directions': ['south'], 'source_frames': [1],
-                'output_native_size': [8, 8], 'preview_fps': 6}))
+                'output_native_size': [8, 8], 'preview_fps': 6,
+                'anchor': [.5, .8], 'pixels_per_unit': 24}))
             output = root/'finished'
             result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
                 '--prepared', str(root), '--painted', str(root/'paint.png'),

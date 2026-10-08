@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spriteforge"
+  short_description: "Generate characters, terrain, and items as RPG sprites"
+  default_prompt: "Use $spriteforge to generate this asset as oblique RPG pixel sprites with editable Blender sources."

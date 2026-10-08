@@ -126,17 +126,23 @@ def finish(args: argparse.Namespace) -> None:
     mask = Image.open(args.prepared/'geometry-mask.png').convert('L')
     if mask.size != size:
         raise ValueError('geometry mask does not match sheet metadata')
+    raw_paint = paint.copy()
+    if args.clip_to_geometry:
+        # Remove overshoot; never invent coverage where the paint missed geometry.
+        paint.putalpha(ImageChops.multiply(paint.getchannel('A'), mask))
+        paint = Image.composite(paint, Image.new('RGBA', size), paint.getchannel('A'))
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     (root/'sprites').mkdir()
     report = []
-    overlay = paint.copy()
+    overlay = raw_paint.copy()
     for row, direction in enumerate(metadata['directions']):
         for column, frame in enumerate(metadata['source_frames']):
             x, y = cell_origin(row, column, phases, columns, (width, height))
             box = (x, y, x+width, y+height)
             tile = paint.crop(box)
-            actual = tile.getchannel('A')
+            raw_tile = raw_paint.crop(box)
+            actual = raw_tile.getchannel('A')
             target = mask.crop(box)
             union = ImageChops.lighter(actual, target).histogram()[255]
             intersection = ImageChops.multiply(actual, target).histogram()[255]
@@ -147,11 +153,12 @@ def finish(args: argparse.Namespace) -> None:
             report.append({'direction': direction, 'source_frame': frame,
                            'silhouette_iou': intersection/union,
                            'outside_pixels': extra.histogram()[255],
-                           'missing_pixels': missing.histogram()[255]})
+                           'missing_pixels': missing.histogram()[255],
+                           'exported_outside_pixels': ImageChops.subtract(tile.getchannel('A'), target).histogram()[255]})
             tile.save(root/'sprites'/f'{direction}-{frame:04d}.png')
-            tile.paste((255, 55, 55, 255), (0, 0, width, height), extra)
-            tile.paste((0, 220, 255, 255), (0, 0, width, height), missing)
-            overlay.paste(tile, (x, y))
+            raw_tile.paste((255, 55, 55, 255), (0, 0, width, height), extra)
+            raw_tile.paste((0, 220, 255, 255), (0, 0, width, height), missing)
+            overlay.paste(raw_tile, (x, y))
     paint.save(root/'painted-native.png')
     overlay.save(root/'silhouette-drift.png')
     animation = []
@@ -164,7 +171,9 @@ def finish(args: argparse.Namespace) -> None:
     animation[0].save(root/'preview.webp', save_all=True, append_images=animation[1:],
                       duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)
     (root/'boundary-report.json').write_text(json.dumps(report, indent=2)+'\n')
-    metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed')
+    metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed',
+                    clip_to_geometry=args.clip_to_geometry,
+                    boundary_report_measures='raw paint before geometry clipping')
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     print(json.dumps({'output': str(root), 'silhouette_iou_range':
                      [min(r['silhouette_iou'] for r in report), max(r['silhouette_iou'] for r in report)]}))
@@ -192,6 +201,8 @@ def main() -> None:
     finish_parser.add_argument('--prepared', type=Path, required=True)
     finish_parser.add_argument('--painted', type=Path, required=True)
     finish_parser.add_argument('--output', type=Path, required=True)
+    finish_parser.add_argument('--clip-to-geometry', action='store_true',
+                               help='remove paint outside the real model mask; retain missing coverage and raw drift evidence')
     args = parser.parse_args()
     if args.command == 'prepare':
         if args.step < 1:

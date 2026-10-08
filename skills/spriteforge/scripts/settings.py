@@ -121,10 +121,6 @@ class Settings:
         if lighting not in ('key', 'studio'):
             raise ValueError('lighting must be key or studio')
         shear = vector(data.get("shear", [0, 0.85]), 2, "shear")
-        # The physical camera compensates vertical foreshortening. A diagonal
-        # cabinet projection needs a camera with a skewed image plane first.
-        if lighting == 'studio' and shear[0] != 0:
-            raise ValueError('studio lighting requires shear X = 0')
         return cls(tuple(int(v) for v in size), density, palette, collection,
                    tuple(frames), tuple(directions), vector(data.get("pivot", [0, 0, 0]), 3, "pivot"),
                    anchor, shear,

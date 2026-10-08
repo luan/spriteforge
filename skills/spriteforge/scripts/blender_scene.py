@@ -174,6 +174,43 @@ def outline_pass(scene, output):
     return file
 
 
+def oblique_camera(camera, scene, settings):
+    """Cast native oblique rays while retaining square ground and source normals."""
+    import cycles.osl
+    if not bpy.app.build_options.cycles_osl:
+        raise ValueError('diagonal studio projection requires Blender with Cycles OSL support')
+    scene.render.engine = 'CYCLES'
+    scene.cycles.device = 'CPU'  # Custom cameras are not supported by Metal/HIP.
+    scene.cycles.samples = 128
+    # Cycles has its own reconstruction filter; retain lighting samples without
+    # blending neighboring native pixel coverage.
+    scene.cycles.filter_width = .01
+    scene.cycles.use_denoising = False
+    scene.cycles.use_adaptive_sampling = False
+    scene.cycles.seed = 0
+    scene.cycles.use_animated_seed = False
+    scene.cycles.max_bounces = 2
+    width, height = (v/settings.pixels_per_unit for v in settings.size)
+    sx, sy = settings.shear
+    altitude = 100
+    camera.location = ((.5-settings.anchor[0])*width-sx*altitude,
+                       (settings.anchor[1]-.5)*height-sy*altitude, altitude)
+    camera.rotation_euler = (0, 0, 0)
+    camera.data.type = 'CUSTOM'
+    shader = bpy.data.texts.new('Spriteforge oblique camera.osl')
+    shader.write(f'''shader oblique_camera(output point position=0.0,
+        output vector direction=0.0, output color throughput=1.0) {{
+        point raster=camera_shader_raster_position();
+        position=point((raster.x-0.5)*{width:.17g},(raster.y-0.5)*{height:.17g},0.0);
+        direction=normalize(vector({sx:.17g},{sy:.17g},1.0));
+    }}''')
+    camera.data.custom_mode = 'INTERNAL'
+    camera.data.custom_shader = shader
+    cycles.osl.update_custom_camera_shader(camera.data, lambda kinds, message: print(message))
+    if not camera.data.custom_bytecode:
+        raise ValueError('oblique camera shader compilation failed')
+
+
 def render(source: Path, output: Path) -> None:
     settings = Settings.load(output / "asset.json")
     original = bpy.context.scene
@@ -205,7 +242,10 @@ def render(source: Path, output: Path) -> None:
     width, height = settings.size
     camera.location = ((0.5 - settings.anchor[0]) * width / settings.pixels_per_unit,
                        (settings.anchor[1] - 0.5) * height / settings.pixels_per_unit, 100)
-    if settings.lighting == "studio":
+    diagonal = settings.lighting == 'studio' and settings.shear[0] != 0
+    if diagonal:
+        oblique_camera(camera, scene, settings)
+    elif settings.lighting == "studio":
         angle = math.atan(settings.shear[1])
         cosine, sine = math.cos(angle), math.sin(angle)
         # An anamorphic orthographic camera retains square ground tiles and
@@ -250,7 +290,8 @@ def render(source: Path, output: Path) -> None:
             proxies = []
             for mesh, world in evaluated:
                 copy = mesh.copy()
-                copy.transform(transform @ world)
+                if not diagonal:
+                    copy.transform(transform @ world)
                 if settings.shading == "bands":
                     originals = list(copy.materials)
                     for index, material in enumerate(originals or [None]):
@@ -263,6 +304,8 @@ def render(source: Path, output: Path) -> None:
                             copy.materials.append(materials[name])
                 obj = bpy.data.objects.new("Pixel Proxy", copy)
                 scene.collection.objects.link(obj)
+                if diagonal:
+                    obj.matrix_world = transform @ world
                 if pass_file:
                     group = mesh['spriteforge_outline_id']
                     if type(group) is not int or not 0 <= group <= 255:
@@ -309,6 +352,7 @@ def render(source: Path, output: Path) -> None:
         "source_unchanged": True, "blender": bpy.app.version_string, "settings": "asset.json",
         "scene": "scene.blend", "size": settings.size, "pixels_per_unit": settings.pixels_per_unit,
         "anchor": settings.anchor, "pivot": settings.pivot, "fps": settings.fps,
+        "shear": settings.shear, "render_engine": scene.render.engine,
         "directions": settings.directions, "frames": settings.frames, "evaluated_mesh_counts": mesh_counts, "outline_groups": outline_groups}, indent=2) + "\n")
 
 

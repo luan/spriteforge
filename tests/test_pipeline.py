@@ -37,7 +37,7 @@ class PixelContractTests(unittest.TestCase):
         cases += [{'supersample':v} for v in (0,9,True,1.5)]
         cases += [{'cluster_materials':['missing']}, {'cluster_materials':'cloth'}]
         cases += [{'size':[4096,4096],'supersample':4}]
-        cases += [{'lighting':'unknown'}, {'lighting':'studio','shear':[.3,.8]}]
+        cases += [{'lighting':'unknown'}]
         cases += [{'object_outline':True}, {'object_outline':'#23281d'},
                   {'object_outline':'23281d','supersample':2}]
         for changes in cases:

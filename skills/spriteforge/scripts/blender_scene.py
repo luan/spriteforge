@@ -108,6 +108,12 @@ def snapshots(scene: bpy.types.Scene, collection: str | None) -> list[tuple[bpy.
                     break
                 ancestor = ancestor.parent
             mesh['spriteforge_outline_id'] = group
+            mesh['spriteforge_ray_visibility'] = {
+                name: getattr(obj, name) for name in (
+                    'visible_camera', 'visible_shadow', 'visible_diffuse',
+                    'visible_glossy', 'visible_transmission', 'visible_volume_scatter'
+                )
+            }
             meshes.append((mesh, instance.matrix_world.copy()))
         else:
             bpy.data.meshes.remove(mesh)
@@ -132,6 +138,9 @@ def fit_canvas(scene, settings):
                     rotation=Matrix.Rotation(math.radians(DIRECTIONS[direction]),4,'Z')
                     transform=rotation@Matrix.Translation(-Vector(settings.pivot))
                     for mesh,world in meshes:
+                        if (settings.lighting == 'studio' and settings.shear[0] != 0
+                                and not mesh['spriteforge_ray_visibility']['visible_camera']):
+                            continue
                         matrix=transform@world
                         for vertex in mesh.vertices:
                             point=matrix@vertex.co
@@ -145,6 +154,8 @@ def fit_canvas(scene, settings):
     finally:
         scene.frame_set(original_frame)
     from dataclasses import replace
+    if not all(math.isfinite(value) for value in low + high):
+        raise ValueError('no camera-visible geometry to fit')
     size=tuple(max(existing,math.ceil((max(-lo/anchor,hi/(1-anchor))+8)/16)*16)
                for existing,lo,hi,anchor in zip(settings.size,low,high,settings.anchor))
     if max(size)>4096:raise ValueError('fitted canvas exceeds the native size limit')
@@ -304,6 +315,8 @@ def render(source: Path, output: Path) -> None:
                             copy.materials.append(materials[name])
                 obj = bpy.data.objects.new("Pixel Proxy", copy)
                 scene.collection.objects.link(obj)
+                for name, visible in mesh['spriteforge_ray_visibility'].items():
+                    setattr(obj, name, bool(visible))
                 if diagonal:
                     obj.matrix_world = transform @ world
                 if pass_file:

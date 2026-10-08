@@ -210,6 +210,12 @@ at pixels per second, loops the route and selects the corresponding cardinal
 facing. Use the actor's source-derived speed and include every facing it needs.
 Routes can share the same continuous gait phase through turns.
 
+Diagonal studio rendering preserves each object's authored camera, shadow,
+diffuse, glossy, transmission and volume-scatter ray visibility. Camera-hidden
+geometry can contribute shadows without appearing in the sprite or enlarging its
+fitted canvas. These controls use Cycles; verify the chosen geometry and shadow
+scale in the native animation.
+
 In a Blender authoring script, `blender_scene.fit_canvas(scene, settings)` can
 enlarge one fixed canvas to fit all configured frames/directions. It preserves
 pixel density, pivot and anchor and restores the source frame. It does not

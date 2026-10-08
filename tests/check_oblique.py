@@ -38,4 +38,16 @@ with tempfile.TemporaryDirectory(prefix='spriteforge oblique ') as temporary:
         if image.getpixel((12,48))!=(0,0,255,255) or image.getpixel((20,48))[3]!=0:
             raise ValueError('authored paint changed its color or lost cutout alpha')
     if hashlib.sha256(source.read_bytes()).hexdigest()!=digest:raise ValueError('source changed')
-print('Passed: diagonal height, square ground, undeformed world normals, unblended native pixels, paint alpha, source preservation')
+    visibility_source=directory/'visibility.blend'
+    visibility_digest=hashlib.sha256(visibility_source.read_bytes()).hexdigest()
+    subprocess.run(['uv','run','--script',str(root/'skills/spriteforge/scripts/pipeline.py'),'render',
+                    '--source',str(visibility_source),'--config',str(directory/'visibility.json'),
+                    '--output',str(directory/'visibility')],check=True,capture_output=True)
+    image=Image.open(directory/'visibility/sprites/south-0001.png').convert('RGBA')
+    if image.getpixel((90,40))[3]!=0:raise ValueError('camera-hidden caster became visible')
+    shadowed=image.getpixel((33,64));clear=image.getpixel((95,64))
+    if shadowed[3]!=255 or clear[3]!=255 or max(c-s for c,s in zip(clear[:3],shadowed[:3]))<25:
+        raise ValueError(f'authored shadow visibility changed: shadowed {shadowed}, clear {clear}')
+    if hashlib.sha256(visibility_source.read_bytes()).hexdigest()!=visibility_digest:
+        raise ValueError('visibility source changed')
+print('Passed: diagonal projection, world normals, native pixels, paint alpha, camera/shadow visibility, source preservation')

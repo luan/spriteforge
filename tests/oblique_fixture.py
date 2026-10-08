@@ -43,9 +43,43 @@ emit=nodes.new('ShaderNodeEmission');output=nodes.new('ShaderNodeOutputMaterial'
 links.new(geometry.outputs['Normal'],add.inputs[0]);links.new(add.outputs['Vector'],scale.inputs[0])
 links.new(scale.outputs['Vector'],emit.inputs['Color']);links.new(emit.outputs[0],output.inputs['Surface'])
 probe.data.materials.append(material)
+bpy.ops.mesh.primitive_plane_add(size=.25, location=(1.125,.875,.25))
+hidden=bpy.context.object
+hidden.visible_camera=False
+hidden.visible_shadow=False
+hidden.data.materials.append(pixel_material('Camera-invisible surface',['ff0000']))
+distant=hidden.copy();bpy.context.scene.collection.objects.link(distant)
+distant.location.x=10
 for frame,z in ((1,1),(2,2)):
     probe.location.z=z;probe.keyframe_insert(data_path='location',frame=frame)
 bpy.context.scene.frame_set(1);bpy.context.preferences.filepaths.save_version=0
 bpy.ops.wm.save_as_mainfile(filepath=str(out/'source.blend'))
 (out/'settings.json').write_text(json.dumps({'size':[65,65],'pixels_per_unit':16,'anchor':[.5,.5],
     'shear':[-.5,.5],'lighting':'studio','directions':['south'],'frames':[1,2],'outline':None})+'\n')
+from settings import Settings
+from blender_scene import fit_canvas
+if fit_canvas(bpy.context.scene,Settings.load(out/'settings.json')).size!=(65,65):
+    raise ValueError('camera-hidden geometry expanded the fitted canvas')
+for obj in bpy.context.scene.objects:
+    if obj.type=='MESH': obj.visible_camera=False
+try:
+    fit_canvas(bpy.context.scene,Settings.load(out/'settings.json'))
+except ValueError as error:
+    if 'no camera-visible geometry' not in str(error): raise
+else:
+    raise ValueError('an entirely camera-hidden source has no canvas to fit')
+
+bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
+for x,shadow in ((-1.3,True),(1.3,False)):
+    bpy.ops.mesh.primitive_plane_add(size=1,location=(x,0,0))
+    bpy.context.object.data.materials.append(lit_material('Shadow receiver','6f6f6f',roughness=1))
+    bpy.ops.mesh.primitive_cube_add(size=.6,location=(x,0,.6))
+    caster=bpy.context.object
+    caster.visible_camera=False
+    caster.visible_shadow=shadow
+    caster.data.materials.append(lit_material('Hidden caster','ffffff',roughness=1))
+bpy.context.scene.frame_set(1)
+bpy.ops.wm.save_as_mainfile(filepath=str(out/'visibility.blend'))
+(out/'visibility.json').write_text(json.dumps({'size':[128,128],'pixels_per_unit':24,'anchor':[.5,.5],
+    'shear':[-.45,1.1],'lighting':'studio','directions':['south'],'frames':[1],
+    'light':[0,0,1],'outline':None})+'\n')

@@ -49,6 +49,9 @@ class SheetPrepareTests(unittest.TestCase):
                 self.assertEqual(metadata['anchor'], [(a*s-offset)/extent for a, s, offset, extent in
                     zip(config['anchor'], config['size'], metadata['crop'][:2], metadata['cell'])])
                 self.assertEqual(json.loads((prepared/'clay.json').read_text())['opaque'], opaque)
+                if opaque:
+                    self.assertEqual(metadata['crop'], [0, 0, 96, 96])
+                    self.assertEqual(metadata['cell'], [96, 96])
                 with Image.open(prepared/'clay-sheet.png') as clay, Image.open(prepared/'surface-sheet.png') as color:
                     self.assertEqual(clay.size, color.size)
                     self.assertEqual(clay.getchannel('A').tobytes(), color.getchannel('A').tobytes())

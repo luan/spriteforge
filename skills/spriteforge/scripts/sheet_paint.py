@@ -130,10 +130,16 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                 boxes.append(im.getchannel('A').point(lambda a: 255 if a >= 128 else 0).getbbox())
     if any(box is None for box in boxes):
         raise ValueError('empty clay cell; inspect the source collection and camera')
-    left = math.floor(min(b[0] for b in boxes)/4)-4
-    top = math.floor(min(b[1] for b in boxes)/4)-4
-    width = math.ceil((math.ceil(max(b[2] for b in boxes)/4)+4-left)/8)*8
-    height = math.ceil((math.ceil(max(b[3] for b in boxes)/4)+4-top)/8)*8
+    render = json.loads((root/'render/manifest.json').read_text())
+    if all(box == (0, 0, render['size'][0]*4, render['size'][1]*4) for box in boxes):
+        # Full-cell ground has no transparent padding between neighboring tiles.
+        left, top = 0, 0
+        width, height = render['size']
+    else:
+        left = math.floor(min(b[0] for b in boxes)/4)-4
+        top = math.floor(min(b[1] for b in boxes)/4)-4
+        width = math.ceil((math.ceil(max(b[2] for b in boxes)/4)+4-left)/8)*8
+        height = math.ceil((math.ceil(max(b[3] for b in boxes)/4)+4-top)/8)*8
     crop = (left, top, left+width, top+height)
     count = len(frames)*len(directions)
     columns = min(count, 8, max(1, 2**round(math.log2(math.sqrt(count*height/width)))))
@@ -164,7 +170,6 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                 'columns': columns, 'rows': rows,
                 'input_size': list(sheet.size), 'output_native_size': list(size),
                 'preview_fps': fps, 'source': str(source), 'source_sha256': digest}
-    render = json.loads((root/'render/manifest.json').read_text())
     metadata.update(pixels_per_unit=render['pixels_per_unit'],
                     anchor=[(a*s-offset)/extent for a, s, offset, extent in
                             zip(render['anchor'], render['size'], crop[:2], (width, height))],

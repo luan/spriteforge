@@ -14,22 +14,60 @@ import subprocess
 import sys
 
 
+def clay_material(original):
+    """Neutralize color while keeping the author's UV cutouts and opacity."""
+    import bpy
+    material = original.copy() if original else bpy.data.materials.new('Sheet clay')
+    material.name = 'Sheet clay / '+(original.name if original else 'default')
+    material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    alpha = None
+    for node in nodes:
+        if node.type == 'BSDF_PRINCIPLED':
+            alpha = node.inputs['Alpha']
+            break
+    if alpha is None:
+        for node in nodes:
+            if (node.type == 'MIX_SHADER' and node.inputs[1].is_linked
+                    and node.inputs[1].links[0].from_node.type == 'BSDF_TRANSPARENT'):
+                alpha = node.inputs[0]
+                break
+    surface = nodes.new('ShaderNodeBsdfPrincipled')
+    surface.inputs['Base Color'].default_value = (.55, .55, .55, 1)
+    surface.inputs['Roughness'].default_value = .8
+    surface.inputs['Specular IOR Level'].default_value = .15
+    if alpha is not None:
+        if alpha.is_linked:
+            links.new(alpha.links[0].from_socket, surface.inputs['Alpha'])
+        else:
+            surface.inputs['Alpha'].default_value = alpha.default_value
+    output = next((node for node in nodes if node.type == 'OUTPUT_MATERIAL' and node.is_active_output), None)
+    if output is None:
+        output = nodes.new('ShaderNodeOutputMaterial')
+    links.new(surface.outputs['BSDF'], output.inputs['Surface'])
+    return material
+
+
 def clay(source: Path, output: Path, collection: str | None) -> None:
     import bpy
     bpy.ops.wm.open_mainfile(filepath=str(source), use_scripts=False)
     objects = bpy.data.collections[collection].all_objects if collection else bpy.context.scene.objects
-    material = bpy.data.materials.new('Sheet clay')
-    material.use_nodes = True
-    surface = material.node_tree.nodes.get('Principled BSDF')
-    surface.inputs['Base Color'].default_value = (.55, .55, .55, 1)
-    surface.inputs['Roughness'].default_value = .8
-    surface.inputs['Specular IOR Level'].default_value = .15
+    materials = {}
+
+    def neutral(original):
+        if original not in materials:
+            material = clay_material(original)
+            materials[original] = material
+            # Shared mesh instances may already reference the replacement.
+            materials[material] = material
+        return materials[original]
+
     for obj in objects:
         if obj.type in ('MESH', 'CURVE', 'SURFACE', 'FONT', 'META'):
             if not obj.material_slots:
-                obj.data.materials.append(material)
+                obj.data.materials.append(neutral(None))
             for slot in obj.material_slots:
-                slot.material = material
+                slot.material = neutral(slot.material)
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
 
@@ -45,7 +83,7 @@ def prepare(args: argparse.Namespace) -> None:
     if any(b-a != interval for a, b in zip(frames, frames[1:])):
         raise ValueError('sheet frames must be evenly spaced for held-pose playback')
     settings = replace(original, frames=frames, supersample=4,
-                       outline=None, object_outline=None, opaque=False)
+                       outline=None, object_outline=None)
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     settings.save(root/'clay.json')

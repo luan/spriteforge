@@ -63,7 +63,18 @@ def prepare(args: argparse.Namespace) -> None:
                        check=True, stdout=log, stderr=subprocess.STDOUT)
     if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
         raise ValueError('original model changed during clay preparation')
-    print(json.dumps(pack_sheet(root, settings.directions, frames, settings.fps/interval, source, digest)))
+    surface_render = None
+    if args.surface_guide:
+        surface_render = root/'surface-render'
+        with (root/'surface.log').open('w') as log:
+            subprocess.run(['uv', 'run', '--script', str(Path(__file__).with_name('pipeline.py')),
+                            'render', '--source', str(source), '--config', str(root/'clay.json'),
+                            '--output', str(surface_render), '--blender', args.blender],
+                           check=True, stdout=log, stderr=subprocess.STDOUT)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            raise ValueError('original model changed during surface preparation')
+    print(json.dumps(pack_sheet(root, settings.directions, frames, settings.fps/interval,
+                               source, digest, surface_render)))
 
 
 def cell_origin(direction: int, phase: int, phases: int, columns: int, cell: tuple[int, int]) -> tuple[int, int]:
@@ -71,7 +82,8 @@ def cell_origin(direction: int, phase: int, phases: int, columns: int, cell: tup
     return (index % columns)*cell[0], (index // columns)*cell[1]
 
 
-def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...], fps: float, source: Path, digest: str) -> dict:
+def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...], fps: float,
+               source: Path, digest: str, surface_render: Path | None = None) -> dict:
     from PIL import Image
     boxes = []
     for direction in directions:
@@ -90,15 +102,22 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
     rows = math.ceil(count/columns)
     size = (width*columns, height*rows)
     sheet = Image.new('RGBA', tuple(v*4 for v in size))
+    surface_sheet = Image.new('RGBA', sheet.size) if surface_render else None
     native = Image.new('RGBA', size)
     for row, direction in enumerate(directions):
         for column, frame in enumerate(frames):
             x, y = cell_origin(row, column, len(frames), columns, (width, height))
             name = f'{direction}-{frame:04d}.png'
             with Image.open(root/'render/raw'/name) as im:
+                raw_size = im.size
                 sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
             with Image.open(root/'render/sprites'/name) as im:
                 native.paste(im.crop(crop), (x, y))
+            if surface_sheet is not None:
+                with Image.open(surface_render/'raw'/name) as im:
+                    if im.size != raw_size:
+                        raise ValueError('surface guide must use the same render size as clay')
+                    surface_sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
     sheet.save(root/'clay-sheet.png')
     native.save(root/'clay-native.png')
     native.getchannel('A').save(root/'geometry-mask.png')
@@ -107,6 +126,9 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                 'columns': columns, 'rows': rows,
                 'input_size': list(sheet.size), 'output_native_size': list(size),
                 'preview_fps': fps, 'source': str(source), 'source_sha256': digest}
+    if surface_sheet is not None:
+        surface_sheet.save(root/'surface-sheet.png')
+        metadata['surface_guide'] = 'surface-sheet.png'
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
 
@@ -196,6 +218,8 @@ def main() -> None:
     prepare_parser.add_argument('--config', type=Path, required=True)
     prepare_parser.add_argument('--step', type=int, default=1)
     prepare_parser.add_argument('--blender', default='blender')
+    prepare_parser.add_argument('--surface-guide', action='store_true',
+                                help='also render the original materials in the same sheet layout')
     prepare_parser.add_argument('--output', type=Path, required=True)
     finish_parser = sub.add_parser('finish')
     finish_parser.add_argument('--prepared', type=Path, required=True)

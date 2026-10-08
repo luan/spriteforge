@@ -181,6 +181,30 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
     return metadata
 
 
+def export_static_variants(root: Path, atlas, manifest: dict) -> None:
+    """Export material states as independent, non-cycling runtime assets."""
+    from PIL import Image
+    width,height=manifest['size']
+    assets={}
+    for column,frame in enumerate(manifest['frames']):
+        name=f'variant-{frame:04d}'
+        directory=root/'variants'/name
+        directory.mkdir(parents=True)
+        tile_atlas=Image.new('RGBA',(width,height*len(manifest['directions'])))
+        for row in range(len(manifest['directions'])):
+            tile_atlas.paste(atlas.crop((column*width,row*height,
+                                        (column+1)*width,(row+1)*height)),(0,row*height))
+        tile_atlas.save(directory/'atlas.png')
+        variant={key:manifest[key] for key in ('directions','anchor','pixels_per_unit','size','fps',
+                    'source','source_sha256','pivot','shear','visual_acceptance') if key in manifest}
+        variant.update(frames=[frame],atlas='atlas.png')
+        if 'sheet' in manifest:
+            variant['sheet']='../../'+manifest['sheet']
+        (directory/'manifest.json').write_text(json.dumps(variant,indent=2)+'\n')
+        assets[name]=str(directory.relative_to(root))
+    (root/'variants.json').write_text(json.dumps({'assets':assets},indent=2)+'\n')
+
+
 def finish(args: argparse.Namespace) -> None:
     from PIL import Image, ImageChops
     metadata = json.loads((args.prepared/'sheet.json').read_text())
@@ -250,7 +274,10 @@ def finish(args: argparse.Namespace) -> None:
     for key in ('source', 'source_sha256', 'pivot', 'shear'):
         if key in metadata:
             manifest[key] = metadata[key]
-    (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    if args.variants:
+        export_static_variants(root,atlas,manifest)
+    else:
+        (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     overlay.save(root/'silhouette-drift.png')
     animation = []
     for column in range(len(metadata['source_frames'])):
@@ -259,11 +286,13 @@ def finish(args: argparse.Namespace) -> None:
             x, y = cell_origin(row, column, phases, columns, (width, height))
             preview.paste(paint.crop((x, y, x+width, y+height)), (row*width, 0))
         animation.append(preview)
-    animation[0].save(root/'preview.webp', save_all=True, append_images=animation[1:],
-                      duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)
+    if not args.variants:
+        animation[0].save(root/'preview.webp', save_all=True, append_images=animation[1:],
+                          duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)
     (root/'boundary-report.json').write_text(json.dumps(report, indent=2)+'\n')
     metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed',
                     clip_to_geometry=args.clip_to_geometry,
+                    frame_mode='static_variants' if args.variants else 'animation',
                     boundary_report_measures='raw paint before geometry clipping')
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     print(json.dumps({'output': str(root), 'silhouette_iou_range':
@@ -296,6 +325,8 @@ def main() -> None:
     finish_parser.add_argument('--output', type=Path, required=True)
     finish_parser.add_argument('--config', type=Path,
                                help='original render profile for older sheets without placement metadata')
+    finish_parser.add_argument('--variants', action='store_true',
+                               help='export each source state as an independent static asset instead of an animation')
     finish_parser.add_argument('--clip-to-geometry', action='store_true',
                                help='remove paint outside the real model mask; retain missing coverage and raw drift evidence')
     args = parser.parse_args()

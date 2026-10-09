@@ -56,6 +56,9 @@ with rooted phase-offset movement at 4–6 sprite poses per second. Both space a
 Test neighboring variants together on every frame. Terrain transitions need
 explicit masks for the requested neighbors and concave corners; show a composed
 map that includes bends, intersections, shoreline, and mixed ground.
+One continuous 128px field can supply four adjacent 64px tiles through quarter
+UV ranges. Map a transition's grass and soil using the same world coordinates
+as their neighbors; rotating only a path mask must not rotate its surface paint.
 
 Use `tileable` for the exact border contract described in `workflow.md`. Some
 continuous textures use different edge samples but still repeat visually; in

@@ -44,6 +44,11 @@ These are design budgets, not automatic quality thresholds. A buckle may need
 several pixels at one size and one deliberate highlight at another. Projected
 texel size matters: use larger surface features where the view compresses them.
 
+Budget texture density per UV chart and axis. A four-pixel leaflet cannot resolve
+32 texels across; filter the source field before rendering. Long narrow straps,
+cuffs and hair locks need different horizontal and vertical budgets. Keep
+connected vein, fold and grain shapes rather than isolated surviving texels.
+
 ## Shape and painted finish
 
 Give characters enough head and hand area for their role to read. Preserve
@@ -78,6 +83,10 @@ one-pixel outer contour can help at small sizes, but a uniform dark border must
 not swallow fingers, leaf gaps, or facial features. Test the sprite on light and
 dark ground at native scale. Reserve the darkest clusters for occlusion and the
 brightest for focal accents.
+On a two-pixel-wide leaflet, a one-pixel contour can overwhelm the colored fill.
+Disable or soften that contour when the material edges already describe the
+frond. Review the complete scene too: grass detail should remain quieter than
+character faces, costume edges and prop construction.
 Choose the palette from the actual painted features and native render. Add shades
 when they carry useful form or material information; a fixed per-material color
 count cannot establish this style. Uniform bands across rounded surfaces read

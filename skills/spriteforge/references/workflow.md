@@ -1,10 +1,8 @@
 # Rendering workflow
 
-Public [worked examples](https://github.com/luan/spriteforge/tree/main/examples)
-retain concepts, authoring scripts, textured sources, motion refinement and
-recorded scenes. They cover humans, monsters, terrain, decoration and items.
-Use their source/review pairs to understand the method; their measured checks
-do not replace reviewing a new design at its requested size.
+Keep concepts, authoring scripts, textured sources, motion refinement and
+recorded scenes with delivered assets. Review their source/sprite pairs at the
+requested native size; measured export checks do not establish art quality.
 
 Requirements: Blender 5.2+ and `uv`. The launcher's inline metadata requires
 Python 3.10+ and Pillow 12; `uv` provisions them automatically. Blender's embedded

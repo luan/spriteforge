@@ -284,6 +284,8 @@ def register_canvas(paint, target):
                             and abs(candidate[2]) <= width*.05 and abs(candidate[3]) <= height*.05):
                         continue
                     candidates.append((score(candidate), candidate))
+            if not candidates:
+                break
             result, candidate = max(candidates, key=lambda pair: pair[0])
             if result <= best:
                 break

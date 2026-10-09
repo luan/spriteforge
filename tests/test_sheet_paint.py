@@ -222,7 +222,7 @@ class SheetPaintTests(unittest.TestCase):
             output = root/'finished'
             result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
                 '--prepared', str(root), '--painted', str(root/'paint.png'),
-                '--output', str(output), '--clip-to-geometry', '--outline', '112233'],
+                '--output', str(output), '--register', '--clip-to-geometry', '--outline', '112233'],
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             with Image.open(output/'sprites/south-0001.png') as exported:

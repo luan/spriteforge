@@ -21,6 +21,21 @@ corresponding top/base features on walls, posts or simple props to calibrate
 the height projection. Keep object height and width as separate model parameters.
 Check a second asset before accepting the camera.
 
+For seams intended to read as connected lines, measure width perpendicular to
+the projected edge. A gap one pixel wide along world X can be narrower across
+a diagonal edge. Project world vectors `e` along the edge and `w` across its
+actual gap with the equations above, after applying the facing and pose:
+
+```text
+gap pixels = pixels per unit * abs(e.X * w.Y - e.Y * w.X) / length(e)
+```
+
+Here `e` and `w` are the projected 2D vectors. Review another pose if the edge
+projects to zero length. When a seam breaks into dots, enlarge its projected
+width or paint a connected joint in UV space. Back modeled gaps with recessed
+geometry when they should remain opaque. Match surface-map density to projected
+coverage as well; narrow framing needs fewer texels across it than broad panels.
+
 With `lighting: studio` and a nonzero horizontal shear, the renderer uses a
 Cycles OSL camera to cast these rays directly. It retains source geometry,
 normals, UVs and material coordinates instead of shearing geometry for shading

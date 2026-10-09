@@ -59,6 +59,10 @@ map that includes bends, intersections, shoreline, and mixed ground.
 One continuous 128px field can supply four adjacent 64px tiles through quarter
 UV ranges. Map a transition's grass and soil using the same world coordinates
 as their neighbors; rotating only a path mask must not rotate its surface paint.
+Compose base tiles on layer 0, ground overlays such as ponds on layer 1, and
+actors, props and vegetation on layer 2. World objects sort by their anchor Y
+within that layer. Sharing a layer with opaque tiles can hide an overlay under
+the next terrain row.
 
 Use `tileable` for the exact border contract described in `workflow.md`. Some
 continuous textures use different edge samples but still repeat visually; in

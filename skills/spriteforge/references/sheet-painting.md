@@ -18,8 +18,10 @@ uv run --script scripts/sheet_paint.py prepare \
 The script copies the model, neutralizes material color while preserving authored
 cutouts, and renders the same camera and rig at 4× resolution. It records cell
 layout, source frames, placement and native silhouette masks in `sheet.json`.
-`--step 2` selects every second pose and halves playback cadence to preserve the
-source cycle duration; omit it to include every pose. Optional `--surface-guide`
+`--step 2` selects every second pose and adjusts playback cadence to preserve the
+source cycle duration; omit it to include every pose. The profile's `fps` is the
+exported pose cadence, even when source frame numbers are spaced apart.
+Optional `--surface-guide`
 adds `surface-sheet.png` with the original material colors and UV detail.
 
 Prepare each entity independently. Terrain and water need reusable tile sheets

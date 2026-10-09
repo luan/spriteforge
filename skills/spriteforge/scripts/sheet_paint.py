@@ -72,16 +72,22 @@ def clay(source: Path, output: Path, collection: str | None) -> None:
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
 
 
+def sampled_clip(frames: tuple[int, ...], fps: float, step: int) -> tuple[tuple[int, ...], float]:
+    """Source frame numbers locate poses; fps describes exported pose playback."""
+    selected = frames[::step]
+    interval = selected[1] - selected[0] if len(selected) > 1 else step
+    if any(b-a != interval for a, b in zip(selected, selected[1:])):
+        raise ValueError('sheet frames must be evenly spaced for held-pose playback')
+    return selected, fps * len(selected) / len(frames)
+
+
 def prepare(args: argparse.Namespace) -> None:
     from PIL import Image
     from settings import Settings
     source = args.source.resolve()
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     original = Settings.load(args.config)
-    frames = original.frames[::args.step]
-    interval = frames[1] - frames[0] if len(frames) > 1 else args.step
-    if any(b-a != interval for a, b in zip(frames, frames[1:])):
-        raise ValueError('sheet frames must be evenly spaced for held-pose playback')
+    frames, fps = sampled_clip(original.frames, original.fps, args.step)
     settings = replace(original, frames=frames, supersample=4,
                        outline=None, object_outline=None)
     root = args.output.resolve()
@@ -111,7 +117,7 @@ def prepare(args: argparse.Namespace) -> None:
                            check=True, stdout=log, stderr=subprocess.STDOUT)
         if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
             raise ValueError('original model changed during surface preparation')
-    print(json.dumps(pack_sheet(root, settings.directions, frames, settings.fps/interval,
+    print(json.dumps(pack_sheet(root, settings.directions, frames, fps,
                                source, digest, surface_render)))
 
 

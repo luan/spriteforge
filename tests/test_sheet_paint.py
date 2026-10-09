@@ -14,9 +14,22 @@ from PIL import Image
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills/spriteforge/scripts/sheet_paint.py'
+sys.path.insert(0, str(SCRIPT.parent))
+from sheet_paint import sampled_clip
 
 
 class SheetPaintTests(unittest.TestCase):
+    def test_pose_sampling_preserves_clip_duration_independent_of_source_numbers(self):
+        for frames, fps, step in [((1, 6, 11, 16), 6, 1),
+                                  ((1, 6, 11, 16), 6, 2),
+                                  (tuple(range(1, 16)), 12, 2)]:
+            with self.subTest(frames=frames, step=step):
+                selected, cadence = sampled_clip(frames, fps, step)
+                self.assertEqual(selected, frames[::step])
+                self.assertAlmostEqual(len(selected)/cadence, len(frames)/fps)
+        with self.assertRaisesRegex(ValueError, 'evenly spaced'):
+            sampled_clip((1, 3, 8), 6, 1)
+
     def test_finish_preserves_cells_and_animation_in_both_layouts(self):
         for columns in (3, 2):
             with self.subTest(columns=columns), tempfile.TemporaryDirectory() as temporary:

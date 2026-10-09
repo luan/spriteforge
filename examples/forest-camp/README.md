@@ -5,7 +5,7 @@ An original scene assembled from 19 independent sprite assets. Ground tiles are
 world unit. Walking uses 6 held poses per second, idle 3, and environment clips 6.
 The composition records at 12fps.
 
-![Animated forest camp](media/scene.webp)
+<img src="media/scene.webp" width="448" alt="Animated forest camp">
 
 [24-second video](media/scene.mp4) · [Full scene PNG](media/scene.png)
 · [Four-direction character animation](media/ranger.webp)

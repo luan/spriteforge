@@ -23,6 +23,10 @@ source cycle duration; omit it to include every pose. The profile's `fps` is the
 exported pose cadence, even when source frame numbers are spaced apart.
 Optional `--surface-guide`
 adds `surface-sheet.png` with the original material colors and UV detail.
+It also identifies poses whose high-resolution clay and surface renders are
+byte-identical. Finishing reuses their canonical paint to prevent texture
+changes during static holds and reversed motion. Other poses keep their own
+paint; `identical-pose-holds.json` records any reuse.
 
 Prepare each entity independently. Terrain and water need reusable tile sheets
 and their own frames; opaque tiles can use `opaque: true`. Assemble exported

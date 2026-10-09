@@ -19,6 +19,44 @@ from sheet_paint import sampled_clip
 
 
 class SheetPaintTests(unittest.TestCase):
+    def test_identical_source_pose_holds_share_paint_and_require_matching_masks(self):
+        for matching in (True, False):
+            with self.subTest(matching=matching), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                paint = Image.new('RGBA', (24, 8))
+                colors = [(35, 113, 201, 255), (211, 82, 36, 255), (147, 183, 71, 255)]
+                for index, color in enumerate(colors):
+                    paint.paste(color, (index*8+2, 2, index*8+6, 6))
+                paint.save(root/'paint.png')
+                mask = paint.getchannel('A')
+                if not matching:
+                    mask.putpixel((10, 2), 0)
+                mask.save(root/'geometry-mask.png')
+                (root/'sheet.json').write_text(json.dumps({
+                    'cell': [8, 8], 'directions': ['south'], 'source_frames': [1, 6, 11],
+                    'output_native_size': [24, 8], 'preview_fps': 6,
+                    'anchor': [.5, .8], 'pixels_per_unit': 24,
+                    'pose_identity': {'south': [1, 1, 11]}}))
+                output = root/'finished'
+                result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                    '--prepared', str(root), '--painted', str(root/'paint.png'),
+                    '--output', str(output)], capture_output=True, text=True)
+                if not matching:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('different geometry masks', result.stderr)
+                    self.assertFalse(output.exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                with Image.open(output/'painted-native.png') as actual:
+                    self.assertEqual(actual.getpixel((3, 3)), colors[0])
+                    self.assertEqual(actual.getpixel((11, 3)), colors[0])
+                    self.assertEqual(actual.getpixel((19, 3)), colors[2])
+                self.assertEqual(json.loads((output/'identical-pose-holds.json').read_text()),
+                                 {'south-0006': 1})
+                manifest = json.loads((output/'manifest.json').read_text())
+                self.assertEqual(manifest['frames'], [1, 6, 11])
+                self.assertEqual(manifest['fps'], 6)
+
     def test_global_registration_recovers_shifted_sheet_without_changing_pose_colors(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

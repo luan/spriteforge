@@ -154,13 +154,17 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
     sheet = Image.new('RGBA', tuple(v*4 for v in size))
     surface_sheet = Image.new('RGBA', sheet.size) if surface_render else None
     native = Image.new('RGBA', size)
+    pose_identity = {}
     for row, direction in enumerate(directions):
+        known_poses = {}
+        canonical_frames = []
         for column, frame in enumerate(frames):
             x, y = cell_origin(row, column, len(frames), columns, (width, height))
             name = f'{direction}-{frame:04d}.png'
             with Image.open(root/'render/raw'/name) as im:
                 raw_size = im.size
                 sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
+                clay_pixels = im.tobytes()
             with Image.open(root/'render/sprites'/name) as im:
                 native.paste(im.crop(crop), (x, y))
             if surface_sheet is not None:
@@ -168,6 +172,11 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                     if im.size != raw_size:
                         raise ValueError('surface guide must use the same render size as clay')
                     surface_sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
+                    # Both geometry and authored surface appearance must match.
+                    digest = hashlib.sha256(clay_pixels+im.tobytes()).hexdigest()
+                    canonical_frames.append(known_poses.setdefault(digest, frame))
+        if surface_sheet is not None:
+            pose_identity[direction] = canonical_frames
     sheet.save(root/'clay-sheet.png')
     native.save(root/'clay-native.png')
     native.getchannel('A').save(root/'geometry-mask.png')
@@ -183,6 +192,7 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
     if surface_sheet is not None:
         surface_sheet.save(root/'surface-sheet.png')
         metadata['surface_guide'] = 'surface-sheet.png'
+        metadata['pose_identity'] = pose_identity
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
 
@@ -209,6 +219,32 @@ def export_static_variants(root: Path, atlas, manifest: dict) -> None:
         (directory/'manifest.json').write_text(json.dumps(variant,indent=2)+'\n')
         assets[name]=str(directory.relative_to(root))
     (root/'variants.json').write_text(json.dumps({'assets':assets},indent=2)+'\n')
+
+
+def hold_identical_poses(paint, mask, metadata):
+    """Share paint only for poses with identical source geometry and UV renders."""
+    from PIL import ImageChops
+    frames = metadata['source_frames']
+    phases = len(frames)
+    cell = tuple(metadata['cell'])
+    columns = metadata.get('columns', phases)
+    holds = {}
+    for row, direction in enumerate(metadata['directions']):
+        identities = metadata.get('pose_identity', {}).get(direction, frames)
+        if len(identities) != phases:
+            raise ValueError('pose identity count does not match sheet frames')
+        for column, canonical in enumerate(identities):
+            if canonical == frames[column]:
+                continue
+            source = cell_origin(row, frames.index(canonical), phases, columns, cell)
+            destination = cell_origin(row, column, phases, columns, cell)
+            box = (*source, source[0]+cell[0], source[1]+cell[1])
+            target_box = (*destination, destination[0]+cell[0], destination[1]+cell[1])
+            if ImageChops.difference(mask.crop(box), mask.crop(target_box)).getbbox():
+                raise ValueError('identical pose record has different geometry masks')
+            paint.paste(paint.crop(box), destination)
+            holds[f'{direction}-{frames[column]:04d}'] = canonical
+    return holds
 
 
 def register_canvas(paint, target):
@@ -289,6 +325,7 @@ def finish(args: argparse.Namespace) -> None:
     registration = None
     if args.register:
         paint, registration = register_canvas(paint, mask)
+    holds = hold_identical_poses(paint, mask, metadata)
     registered_paint = paint.copy()
     if args.clip_to_geometry:
         # Remove overshoot; never invent coverage where the paint missed geometry.
@@ -297,6 +334,8 @@ def finish(args: argparse.Namespace) -> None:
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     (root/'sprites').mkdir()
+    if holds:
+        (root/'identical-pose-holds.json').write_text(json.dumps(holds, indent=2)+'\n')
     if registration:
         (root/'registration.json').write_text(json.dumps(registration, indent=2)+'\n')
         registered_paint.save(root/'painted-registered.png')
@@ -326,6 +365,7 @@ def finish(args: argparse.Namespace) -> None:
             if not actual.getbbox() or not target.getbbox():
                 raise ValueError(f'empty cell: {direction}/{frame}')
             report.append({'direction': direction, 'source_frame': frame,
+                           'held_from_source_frame': holds.get(f'{direction}-{frame:04d}', frame),
                            'silhouette_iou': intersection/union,
                            'outside_pixels': extra.histogram()[255],
                            'missing_pixels': missing.histogram()[255],

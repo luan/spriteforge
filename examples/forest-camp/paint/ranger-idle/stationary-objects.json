@@ -1,0 +1,33 @@
+{
+  "stationary_objects": [
+    "Boot -1",
+    "Boot 1",
+    "Boot turned cuff -1",
+    "Boot turned cuff 1",
+    "Brass waist buckle",
+    "Brass waist buckle tongue",
+    "Cream tunic piping -1",
+    "Cream tunic piping 1",
+    "Satchel buckle",
+    "Satchel buckle tongue",
+    "Satchel flap",
+    "Split sage back skirt -1",
+    "Split sage back skirt 1",
+    "Split sage front skirt -1",
+    "Split sage front skirt 1",
+    "Travel satchel",
+    "Waist belt"
+  ],
+  "source_frames": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13,
+    15
+  ],
+  "method": "evaluated world vertices at 1e-7 precision, topology, UVs and material assignment unchanged",
+  "limits": "direct meshes with fixed materials; instanced and animated-material sources excluded"
+}

@@ -1,0 +1,31 @@
+{
+  "size": [
+    40,
+    48
+  ],
+  "directions": [
+    "south"
+  ],
+  "frames": [
+    1
+  ],
+  "fps": 6.0,
+  "anchor": [
+    0.49000000000000005,
+    0.6375000000000001
+  ],
+  "pixels_per_unit": 24.0,
+  "outline": "27291f",
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/barrel.blend",
+  "source_sha256": "358030f8b0ba805ab53045b3a64e1f8ec2e7a57f1fd0fa7812a73de33ec3601f"
+}

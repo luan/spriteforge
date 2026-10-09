@@ -1,0 +1,46 @@
+{
+  "size": [
+    48,
+    80
+  ],
+  "directions": [
+    "south"
+  ],
+  "frames": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "fps": 6.0,
+  "anchor": [
+    0.4625000000000001,
+    0.6895
+  ],
+  "pixels_per_unit": 24.0,
+  "outline": "27291f",
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/crate.blend",
+  "source_sha256": "c9c17373fd14b6479a0d1ebdfe0b5a2b7a403fb014b46f80e0da3c7f9c8ff72a"
+}

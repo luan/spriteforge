@@ -1,0 +1,30 @@
+{
+  "size": [
+    96,
+    96
+  ],
+  "directions": [
+    "south"
+  ],
+  "frames": [
+    1
+  ],
+  "fps": 6.0,
+  "anchor": [
+    0.5,
+    0.5
+  ],
+  "pixels_per_unit": 24.0,
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/sword.blend",
+  "source_sha256": "38214d292bc5ab33d0c3d12191608bbf1f1ba1cf4cb845dd723ff46e94a3ad73"
+}

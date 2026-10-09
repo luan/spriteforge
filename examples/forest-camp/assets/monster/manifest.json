@@ -1,0 +1,42 @@
+{
+  "size": [
+    72,
+    80
+  ],
+  "directions": [
+    "east"
+  ],
+  "frames": [
+    1,
+    6,
+    11,
+    16,
+    21,
+    26,
+    31,
+    36,
+    41,
+    46,
+    51,
+    56
+  ],
+  "fps": 6,
+  "anchor": [
+    0.3611111111111111,
+    0.5625
+  ],
+  "pixels_per_unit": 24.0,
+  "outline": "272923",
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/monster.blend",
+  "source_sha256": "da54d27791d0dc7ca7812177d27ed77af229ffe0babf61e7a9cd9de8c8edabbd"
+}

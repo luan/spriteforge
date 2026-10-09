@@ -26,6 +26,8 @@ silhouettes, interior placement and temporal consistency before delivery.
 Export each entity independently, including reusable terrain tiles and water
 frames. Assemble the final scene with `scripts/compose.py`, retaining independent
 placement, facing, animation and depth ordering.
+The [forest camp example](https://github.com/luan/spriteforge/tree/main/examples/forest-camp)
+includes independent sheets, packed models, geometry recipes and an animated scene.
 
 1. Establish tile size, occupied asset size, canvas and animation cadence.
    Unless specified otherwise, use 64px ground tiles, a roughly 64px human,

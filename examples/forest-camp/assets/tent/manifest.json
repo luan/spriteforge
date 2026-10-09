@@ -1,0 +1,46 @@
+{
+  "size": [
+    136,
+    112
+  ],
+  "directions": [
+    "south"
+  ],
+  "frames": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "fps": 6.0,
+  "anchor": [
+    0.4852941176470588,
+    0.5357142857142857
+  ],
+  "pixels_per_unit": 24.0,
+  "outline": "27291f",
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/tent.blend",
+  "source_sha256": "287c01c5f3ea169d1f4acaa29e2cec7dc46a8109af3054f695805bbac13f5947"
+}

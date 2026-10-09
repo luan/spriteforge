@@ -1,0 +1,42 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "pixels_per_unit": 24.0,
+  "palette": {},
+  "collection": "Dirt straight 0",
+  "frames": [
+    1
+  ],
+  "directions": [
+    "south"
+  ],
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "anchor": [
+    0.5,
+    0.5
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "light": [
+    -0.5,
+    -0.65,
+    1.0
+  ],
+  "outline": null,
+  "shading": "preserve",
+  "fps": 6.0,
+  "tileable": false,
+  "supersample": 1,
+  "cluster_materials": [],
+  "lighting": "studio",
+  "opaque": true,
+  "object_outline": null
+}

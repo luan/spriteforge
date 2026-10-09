@@ -1,0 +1,58 @@
+{
+  "collection": "Mira",
+  "size": [
+    128,
+    128
+  ],
+  "pixels_per_unit": 24,
+  "palette": {},
+  "directions": [
+    "south",
+    "east",
+    "north",
+    "west"
+  ],
+  "frames": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "fps": 6,
+  "pivot": [
+    0,
+    0,
+    0
+  ],
+  "anchor": [
+    0.7,
+    0.75
+  ],
+  "shear": [
+    0,
+    0.85
+  ],
+  "light": [
+    -0.5,
+    -0.65,
+    1
+  ],
+  "outline": "242820",
+  "shading": "preserve",
+  "tileable": false,
+  "cluster_materials": [],
+  "supersample": 1,
+  "lighting": "studio"
+}

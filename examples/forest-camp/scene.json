@@ -1,0 +1,640 @@
+{
+  "size": [
+    448,
+    384
+  ],
+  "fps": 12,
+  "frames": 288,
+  "scale": 2,
+  "assets": {
+    "grass": "assets/grass",
+    "grass-1": "assets/grass-1",
+    "grass-2": "assets/grass-2",
+    "grass-3": "assets/grass-3",
+    "dirt-straight-0": "assets/dirt-straight-0",
+    "dirt-straight-alternate": "assets/dirt-straight-alternate",
+    "pond-ripples": "assets/pond-ripples",
+    "pine": "assets/pine",
+    "fern": "assets/fern",
+    "flowers": "assets/flowers",
+    "monster": "assets/monster",
+    "crate": "assets/crate",
+    "barrel": "assets/barrel",
+    "tent": "assets/tent",
+    "ranger": "assets/ranger",
+    "ranger-idle": "assets/ranger-idle",
+    "sword": "assets/sword",
+    "potion": "assets/potion",
+    "pond-base": "assets/pond-base"
+  },
+  "instances": [
+    {
+      "asset": "grass",
+      "position": [
+        32,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        96,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        160,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        224,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        288,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        352,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        416,
+        32
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        32,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        96,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        160,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        224,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        288,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        352,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        416,
+        96
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        32,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        96,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        160,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        224,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        288,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-1",
+      "position": [
+        352,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass",
+      "position": [
+        416,
+        160
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        32,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        96,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        160,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        224,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        288,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        352,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        416,
+        224
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-0",
+      "position": [
+        32,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-alternate",
+      "position": [
+        96,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-0",
+      "position": [
+        160,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-alternate",
+      "position": [
+        224,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-0",
+      "position": [
+        288,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-alternate",
+      "position": [
+        352,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "dirt-straight-0",
+      "position": [
+        416,
+        288
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        32,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        96,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        160,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        224,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        288,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-3",
+      "position": [
+        352,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "grass-2",
+      "position": [
+        416,
+        352
+      ],
+      "layer": 0
+    },
+    {
+      "asset": "pond-base",
+      "position": [
+        325,
+        135
+      ],
+      "layer": 1
+    },
+    {
+      "asset": "pond-ripples",
+      "position": [
+        325,
+        135
+      ],
+      "layer": 1
+    },
+    {
+      "asset": "pine",
+      "position": [
+        22,
+        115
+      ],
+      "phase": 0,
+      "layer": 2
+    },
+    {
+      "asset": "pine",
+      "position": [
+        174,
+        135
+      ],
+      "phase": 4,
+      "layer": 2
+    },
+    {
+      "asset": "pine",
+      "position": [
+        416,
+        85
+      ],
+      "phase": 8,
+      "layer": 2
+    },
+    {
+      "asset": "pine",
+      "position": [
+        422,
+        233
+      ],
+      "phase": 2,
+      "layer": 2
+    },
+    {
+      "asset": "pine",
+      "position": [
+        35,
+        366
+      ],
+      "phase": 6,
+      "layer": 2
+    },
+    {
+      "asset": "pine",
+      "position": [
+        190,
+        397
+      ],
+      "phase": 3,
+      "layer": 2
+    },
+    {
+      "asset": "tent",
+      "position": [
+        90,
+        162
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "barrel",
+      "position": [
+        166,
+        192
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "barrel",
+      "position": [
+        184,
+        173
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "crate",
+      "position": [
+        139,
+        212
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "sword",
+      "position": [
+        168,
+        224
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "potion",
+      "position": [
+        118,
+        226
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "fern",
+      "position": [
+        34,
+        204
+      ],
+      "phase": 0,
+      "layer": 2
+    },
+    {
+      "asset": "fern",
+      "position": [
+        227,
+        158
+      ],
+      "phase": 4,
+      "layer": 2
+    },
+    {
+      "asset": "fern",
+      "position": [
+        366,
+        224
+      ],
+      "phase": 7,
+      "layer": 2
+    },
+    {
+      "asset": "fern",
+      "position": [
+        300,
+        357
+      ],
+      "phase": 2,
+      "layer": 2
+    },
+    {
+      "asset": "fern",
+      "position": [
+        66,
+        336
+      ],
+      "phase": 6,
+      "layer": 2
+    },
+    {
+      "asset": "flowers",
+      "position": [
+        199,
+        226
+      ],
+      "phase": 0,
+      "layer": 2
+    },
+    {
+      "asset": "flowers",
+      "position": [
+        256,
+        191
+      ],
+      "phase": 3,
+      "layer": 2
+    },
+    {
+      "asset": "flowers",
+      "position": [
+        425,
+        326
+      ],
+      "phase": 6,
+      "layer": 2
+    },
+    {
+      "asset": "flowers",
+      "position": [
+        342,
+        58
+      ],
+      "phase": 2,
+      "layer": 2
+    },
+    {
+      "asset": "flowers",
+      "position": [
+        205,
+        351
+      ],
+      "phase": 9,
+      "layer": 2
+    },
+    {
+      "asset": "monster",
+      "position": [
+        298,
+        238
+      ],
+      "direction": "east",
+      "layer": 2
+    },
+    {
+      "asset": "monster",
+      "position": [
+        347,
+        365
+      ],
+      "direction": "east",
+      "phase": 6,
+      "layer": 2
+    },
+    {
+      "asset": "ranger-idle",
+      "position": [
+        231,
+        214
+      ],
+      "direction": "south",
+      "phase": 7,
+      "layer": 2
+    },
+    {
+      "asset": "ranger",
+      "position": [
+        45,
+        288
+      ],
+      "direction": "east",
+      "velocity": [
+        20.91385087070562,
+        0
+      ],
+      "wrap_x": [
+        -32,
+        469.9324208969349
+      ],
+      "layer": 2
+    },
+    {
+      "asset": "ranger",
+      "position": [
+        300,
+        300
+      ],
+      "direction": "west",
+      "velocity": [
+        -20.91385087070562,
+        0
+      ],
+      "phase": 4,
+      "wrap_x": [
+        -32,
+        469.9324208969349
+      ],
+      "layer": 2
+    }
+  ]
+}

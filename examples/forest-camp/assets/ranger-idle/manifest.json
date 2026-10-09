@@ -1,0 +1,41 @@
+{
+  "size": [
+    40,
+    72
+  ],
+  "directions": [
+    "south",
+    "east",
+    "north",
+    "west"
+  ],
+  "frames": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13,
+    15
+  ],
+  "fps": 3,
+  "anchor": [
+    0.41499999999999987,
+    0.75
+  ],
+  "pixels_per_unit": 24.0,
+  "outline": "27291f",
+  "pivot": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "shear": [
+    0.0,
+    0.85
+  ],
+  "atlas": "atlas.png",
+  "source": "../../models/ranger-idle.blend",
+  "source_sha256": "c9d10feab1c0bd397ca88681c0c5ba5808bf78302b2819d91d6f11dcef51dbfa"
+}

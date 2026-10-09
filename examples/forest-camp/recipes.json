@@ -1,0 +1,137 @@
+{
+  "grass": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/grass.json"
+  },
+  "grass-1": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/grass-1.json"
+  },
+  "grass-2": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/grass-2.json"
+  },
+  "grass-3": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/grass-3.json"
+  },
+  "dirt-straight-0": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/dirt-straight-0.json"
+  },
+  "dirt-straight-alternate": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/dirt-straight-alternate.json"
+  },
+  "pond-ripples": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/pond-ripples.json"
+  },
+  "pine": {
+    "method": "sheet-paint",
+    "paint": "paint/pine/paint.png",
+    "step": 1,
+    "register": false,
+    "stationary": false,
+    "outline": "243223",
+    "source": "models/forest.blend",
+    "profile": "profiles/pine.json"
+  },
+  "fern": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/fern.json"
+  },
+  "flowers": {
+    "method": "render",
+    "source": "models/forest.blend",
+    "profile": "profiles/flowers.json"
+  },
+  "monster": {
+    "method": "sheet-paint",
+    "paint": "paint/monster/paint.png",
+    "step": 1,
+    "register": true,
+    "stationary": false,
+    "outline": "272923",
+    "source": "models/monster.blend",
+    "profile": "profiles/monster.json"
+  },
+  "crate": {
+    "method": "sheet-paint",
+    "paint": "paint/crate/paint.png",
+    "step": 1,
+    "register": true,
+    "stationary": true,
+    "outline": "27291f",
+    "source": "models/crate.blend",
+    "profile": "profiles/crate.json"
+  },
+  "barrel": {
+    "method": "sheet-paint",
+    "paint": "paint/barrel/paint.png",
+    "step": 1,
+    "register": true,
+    "stationary": false,
+    "outline": "27291f",
+    "source": "models/barrel.blend",
+    "profile": "profiles/barrel.json"
+  },
+  "tent": {
+    "method": "sheet-paint",
+    "paint": "paint/tent/paint.png",
+    "step": 1,
+    "register": false,
+    "stationary": false,
+    "outline": "27291f",
+    "source": "models/tent.blend",
+    "profile": "profiles/tent.json"
+  },
+  "ranger": {
+    "method": "sheet-paint",
+    "paint": "paint/ranger/paint.png",
+    "step": 2,
+    "register": false,
+    "stationary": false,
+    "outline": "242820",
+    "source": "models/ranger-walk.blend",
+    "profile": "profiles/ranger.json"
+  },
+  "ranger-idle": {
+    "method": "sheet-paint",
+    "paint": "paint/ranger-idle/paint.png",
+    "step": 2,
+    "register": true,
+    "stationary": true,
+    "outline": "27291f",
+    "source": "models/ranger-idle.blend",
+    "profile": "profiles/ranger-idle.json"
+  },
+  "sword": {
+    "method": "render",
+    "source": "models/sword.blend",
+    "profile": "profiles/sword.json"
+  },
+  "potion": {
+    "method": "render",
+    "source": "models/potion.blend",
+    "profile": "profiles/potion.json"
+  },
+  "pond-base": {
+    "method": "sheet-paint",
+    "paint": "paint/pond-base/paint.png",
+    "step": 1,
+    "register": true,
+    "stationary": false,
+    "outline": null,
+    "source": "models/forest.blend",
+    "profile": "profiles/pond-base.json"
+  }
+}

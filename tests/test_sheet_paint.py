@@ -162,11 +162,14 @@ class SheetPaintTests(unittest.TestCase):
                 self.assertEqual([entry['silhouette_iou'] for entry in report], [1]*6)
                 with Image.open(output/'preview.webp') as preview:
                     self.assertEqual(preview.n_frames, 3)
+                    duration = 0
                     for phase in range(3):
                         preview.seek(phase)
                         actual = preview.convert('RGBA')
+                        duration += preview.info['duration']
                         self.assertEqual(actual.crop((0, 0, 8, 8)).tobytes(), tiles[phase].tobytes())
                         self.assertEqual(actual.crop((8, 0, 16, 8)).tobytes(), tiles[phase+3].tobytes())
+                    self.assertEqual(duration, 500)
 
     def test_legacy_sheet_requires_original_profile_and_preserves_cropped_anchor(self):
         with tempfile.TemporaryDirectory() as temporary:

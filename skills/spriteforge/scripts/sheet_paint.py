@@ -404,8 +404,10 @@ def finish(args: argparse.Namespace) -> None:
             preview.paste(paint.crop((x, y, x+width, y+height)), (row*width, 0))
         animation.append(preview)
     if not args.variants:
+        durations = [round((i+1)*1000/metadata['preview_fps'])-round(i*1000/metadata['preview_fps'])
+                     for i in range(len(animation))]
         animation[0].save(root/'preview.webp', save_all=True, append_images=animation[1:],
-                          duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)
+                          duration=durations, loop=0, lossless=True, exact=True)
     (root/'boundary-report.json').write_text(json.dumps(report, indent=2)+'\n')
     metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed',
                     clip_to_geometry=args.clip_to_geometry, outline=args.outline,

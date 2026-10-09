@@ -211,6 +211,54 @@ def export_static_variants(root: Path, atlas, manifest: dict) -> None:
     (root/'variants.json').write_text(json.dumps({'assets':assets},indent=2)+'\n')
 
 
+def register_canvas(paint, target):
+    """Correct small whole-canvas drift without fitting individual poses."""
+    from PIL import Image, ImageChops
+    width, height = paint.size
+    alpha = paint.getchannel('A')
+
+    def transform(values):
+        sx, sy, tx, ty = values
+        return (1/sx, 0, width/2*(1-1/sx)-tx/sx,
+                0, 1/sy, height/2*(1-1/sy)-ty/sy)
+
+    def score(values):
+        coverage = alpha.transform(paint.size, Image.Transform.AFFINE,
+                                   transform(values), Image.Resampling.NEAREST)
+        intersection = ImageChops.multiply(coverage, target).histogram()[255]
+        union = ImageChops.lighter(coverage, target).histogram()[255]
+        return intersection/union
+
+    values = [1, 1, 0, 0]
+    best = original = score(values)
+    # Deliberately limited to 5% canvas drift. Larger changes need a new paint pass.
+    for scale_step, shift_step in ((0, 4), (0, 2), (0, 1),
+                                   (.04, 4), (.02, 2), (.01, 1), (.005, .5), (.002, .25)):
+        if best == 1:
+            break
+        for _ in range(30):
+            candidates = []
+            for dimension, step in enumerate((scale_step, scale_step, shift_step, shift_step)):
+                if not step:
+                    continue
+                for sign in (-1, 1):
+                    candidate = values.copy()
+                    candidate[dimension] += step*sign
+                    if not (.95 <= candidate[0] <= 1.05 and .95 <= candidate[1] <= 1.05
+                            and abs(candidate[2]) <= width*.05 and abs(candidate[3]) <= height*.05):
+                        continue
+                    candidates.append((score(candidate), candidate))
+            result, candidate = max(candidates, key=lambda pair: pair[0])
+            if result <= best:
+                break
+            best, values = result, candidate
+    registered = paint.transform(paint.size, Image.Transform.AFFINE,
+                                  transform(values), Image.Resampling.NEAREST)
+    return registered, {'scale': values[:2], 'translation_native_pixels': values[2:],
+                        'raw_silhouette_iou': original, 'registered_silhouette_iou': best,
+                        'scope': 'one whole-canvas transform; no per-pose fitting'}
+
+
 def finish(args: argparse.Namespace) -> None:
     from PIL import Image, ImageChops
     from pixels import finish_image
@@ -238,6 +286,10 @@ def finish(args: argparse.Namespace) -> None:
     if 'anchor' not in metadata or 'pixels_per_unit' not in metadata:
         raise ValueError('sheet lacks placement metadata; rerun prepare or supply --config with the original render profile')
     raw_paint = paint.copy()
+    registration = None
+    if args.register:
+        paint, registration = register_canvas(paint, mask)
+    registered_paint = paint.copy()
     if args.clip_to_geometry:
         # Remove overshoot; never invent coverage where the paint missed geometry.
         paint.putalpha(ImageChops.multiply(paint.getchannel('A'), mask))
@@ -245,6 +297,9 @@ def finish(args: argparse.Namespace) -> None:
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     (root/'sprites').mkdir()
+    if registration:
+        (root/'registration.json').write_text(json.dumps(registration, indent=2)+'\n')
+        registered_paint.save(root/'painted-registered.png')
     report = []
     overlay = raw_paint.copy()
     # Runtime atlases use one row per facing, independent of the paint grid.
@@ -257,6 +312,8 @@ def finish(args: argparse.Namespace) -> None:
             raw_tile = raw_paint.crop(box)
             actual = raw_tile.getchannel('A')
             target = mask.crop(box)
+            registered = registered_paint.crop(box).getchannel('A')
+            registered_union = ImageChops.lighter(registered, target).histogram()[255]
             clipped_alpha = tile.getchannel('A')
             if args.outline:
                 tile = finish_image(tile, Settings(size=(width, height),
@@ -272,6 +329,9 @@ def finish(args: argparse.Namespace) -> None:
                            'silhouette_iou': intersection/union,
                            'outside_pixels': extra.histogram()[255],
                            'missing_pixels': missing.histogram()[255],
+                           'registered_silhouette_iou': ImageChops.multiply(registered, target).histogram()[255]/registered_union,
+                           'registered_missing_pixels': ImageChops.subtract(target, registered).histogram()[255],
+                           'registered_outside_pixels': ImageChops.subtract(registered, target).histogram()[255],
                            'paint_outside_pixels': ImageChops.subtract(clipped_alpha, target).histogram()[255],
                            'outline_pixels': ImageChops.subtract(tile.getchannel('A'), clipped_alpha).histogram()[255],
                            'exported_outside_pixels': ImageChops.subtract(tile.getchannel('A'), target).histogram()[255]})
@@ -307,8 +367,9 @@ def finish(args: argparse.Namespace) -> None:
     (root/'boundary-report.json').write_text(json.dumps(report, indent=2)+'\n')
     metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed',
                     clip_to_geometry=args.clip_to_geometry, outline=args.outline,
+                    register_canvas=args.register,
                     frame_mode='static_variants' if args.variants else 'animation',
-                    boundary_report_measures='raw paint before geometry clipping')
+                    boundary_report_measures='raw paint before registration and geometry clipping')
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     print(json.dumps({'output': str(root), 'silhouette_iou_range':
                      [min(r['silhouette_iou'] for r in report), max(r['silhouette_iou'] for r in report)]}))
@@ -344,6 +405,8 @@ def main() -> None:
                                help='export each source state as an independent static asset instead of an animation')
     finish_parser.add_argument('--clip-to-geometry', action='store_true',
                                help='remove paint outside the real model mask; retain missing coverage and raw drift evidence')
+    finish_parser.add_argument('--register', action='store_true',
+                               help='correct small whole-canvas drift; retain pose placement, model masks and raw measurements')
     from settings import hexcolor
     finish_parser.add_argument('--outline', type=hexcolor,
                                help='add a one-pixel exterior contour after clipping; preserve interior paint and holes')

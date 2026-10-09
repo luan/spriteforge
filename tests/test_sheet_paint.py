@@ -19,6 +19,39 @@ from sheet_paint import sampled_clip
 
 
 class SheetPaintTests(unittest.TestCase):
+    def test_global_registration_recovers_shifted_sheet_without_changing_pose_colors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            expected = Image.new('RGBA', (96, 80))
+            for index in range(6):
+                x, y = (index % 3)*32, (index//3)*40
+                color = (35+index*27, 113, 201-index*19, 255)
+                expected.paste(color, (x+7, y+7, x+23, y+33))
+                expected.putpixel((x+11, y+12), (245, 217, 139, 255))
+            expected.getchannel('A').save(root/'geometry-mask.png')
+            shifted = Image.new('RGBA', expected.size)
+            shifted.paste(expected, (2, -2))
+            shifted.save(root/'paint.png')
+            (root/'sheet.json').write_text(json.dumps({
+                'cell': [32, 40], 'columns': 3, 'directions': ['south', 'west'],
+                'source_frames': [1, 6, 11], 'output_native_size': [96, 80],
+                'preview_fps': 6, 'anchor': [.5, .8], 'pixels_per_unit': 24}))
+            output = root/'finished'
+            result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                '--prepared', str(root), '--painted', str(root/'paint.png'),
+                '--output', str(output), '--register', '--clip-to-geometry'],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with Image.open(output/'painted-native.png') as actual:
+                self.assertEqual(actual.tobytes(), expected.tobytes())
+            registration = json.loads((output/'registration.json').read_text())
+            self.assertEqual(registration['registered_silhouette_iou'], 1)
+            self.assertLess(registration['raw_silhouette_iou'], 1)
+            for record in json.loads((output/'boundary-report.json').read_text()):
+                self.assertGreater(record['missing_pixels'], 0)
+                self.assertEqual(record['registered_missing_pixels'], 0)
+                self.assertEqual(record['paint_outside_pixels'], 0)
+
     def test_pose_sampling_preserves_clip_duration_independent_of_source_numbers(self):
         for frames, fps, step in [((1, 6, 11, 16), 6, 1),
                                   ((1, 6, 11, 16), 6, 2),

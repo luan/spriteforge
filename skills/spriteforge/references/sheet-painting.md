@@ -64,6 +64,15 @@ does not fill missing paint, move features or change retained visible colors.
 The report still measures the raw paint before clipping. Reject misregistered
 paint if clipping severs feet, straps or other features.
 
+If all cells share small canvas drift, `--register` estimates one translation
+and scale for the entire paint sheet against the fixed geometry masks, limited
+to 5%. It never fits individual poses or changes models, masks or anchors.
+`registration.json` records the transform, `painted-registered.png` retains its
+result, and the boundary report keeps both raw and registered measurements.
+Inspect every pose again. Registration cannot repair invented anatomy, cropped
+features, inconsistent markings or different drift in individual cells. For
+such failures, prepare fewer facings per sheet and repaint them separately.
+
 Use `--outline 242820` for a consistent one-native-pixel exterior contour after
 clipping. It follows the retained sprite coverage and preserves interior colors
 and holes. The report separates retained paint outside geometry

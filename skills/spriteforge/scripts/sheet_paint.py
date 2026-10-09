@@ -72,6 +72,67 @@ def clay(source: Path, output: Path, collection: str | None) -> None:
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
 
 
+def stationary_surfaces(source: Path, output: Path, config: Path) -> None:
+    """Classify direct mesh objects by evaluated world geometry and UVs."""
+    import bpy
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from settings import Settings
+    settings = Settings.load(config)
+    bpy.ops.wm.open_mainfile(filepath=str(source), use_scripts=False)
+    scene = bpy.context.scene
+    objects = list(bpy.data.collections[settings.collection].all_objects
+                   if settings.collection else scene.objects)
+    for obj in scene.objects:
+        obj['spriteforge_outline_id'] = 0
+    candidates = {obj.name: obj for obj in objects if obj.type == 'MESH'}
+    original_states = {}
+    rejected = set()
+    for frame in settings.frames:
+        scene.frame_set(frame)
+        graph = bpy.context.evaluated_depsgraph_get()
+        # Instanced placement requires occurrence-level tracking; exclude it here.
+        rejected.update(instance.object.original.name for instance in graph.object_instances
+                        if instance.is_instance)
+        for name, obj in candidates.items():
+            if name in rejected:
+                continue
+            materials = [slot.material for slot in obj.material_slots if slot.material]
+            if any(mat.animation_data or (mat.node_tree and mat.node_tree.animation_data)
+                   or (mat.node_tree and any(node.type == 'TEX_IMAGE' and node.image
+                       and node.image.source in ('SEQUENCE', 'MOVIE') for node in mat.node_tree.nodes))
+                   for mat in materials):
+                rejected.add(name)
+                continue
+            evaluated = obj.evaluated_get(graph)
+            mesh = evaluated.to_mesh()
+            try:
+                if not mesh.vertices:
+                    rejected.add(name)
+                    continue
+                state = (tuple(tuple(round(value, 7) for value in evaluated.matrix_world @ v.co)
+                               for v in mesh.vertices),
+                         tuple(tuple(poly.vertices) for poly in mesh.polygons),
+                         tuple(tuple(tuple(uv.uv) for uv in layer.data) for layer in mesh.uv_layers),
+                         tuple(poly.material_index for poly in mesh.polygons),
+                         tuple(mat.name for mat in mesh.materials if mat))
+                if frame == settings.frames[0]:
+                    original_states[name] = state
+                elif state != original_states[name]:
+                    rejected.add(name)
+            finally:
+                evaluated.to_mesh_clear()
+    names = sorted(candidates.keys()-rejected)
+    for name in names:
+        candidates[name]['spriteforge_outline_id'] = 1
+    scene.frame_set(settings.frames[0])
+    bpy.context.preferences.filepaths.save_version = 0
+    bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
+    output.with_name('stationary-objects.json').write_text(json.dumps({
+        'stationary_objects': names, 'source_frames': settings.frames,
+        'method': 'evaluated world vertices at 1e-7 precision, topology, UVs and material assignment unchanged',
+        'limits': 'direct meshes with fixed materials; instanced and animated-material sources excluded'}, indent=2)+'\n')
+
+
 def sampled_clip(frames: tuple[int, ...], fps: float, step: int) -> tuple[tuple[int, ...], float]:
     """Source frame numbers locate poses; fps describes exported pose playback."""
     selected = frames[::step]
@@ -84,6 +145,8 @@ def sampled_clip(frames: tuple[int, ...], fps: float, step: int) -> tuple[tuple[
 def prepare(args: argparse.Namespace) -> None:
     from PIL import Image
     from settings import Settings
+    if args.hold_stationary_surfaces and not args.surface_guide:
+        raise ValueError('stationary surface holding requires --surface-guide')
     source = args.source.resolve()
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     original = Settings.load(args.config)
@@ -117,8 +180,27 @@ def prepare(args: argparse.Namespace) -> None:
                            check=True, stdout=log, stderr=subprocess.STDOUT)
         if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
             raise ValueError('original model changed during surface preparation')
+    stationary_render = None
+    if args.hold_stationary_surfaces:
+        with (root/'stationary.log').open('w') as log:
+            subprocess.run([args.blender, '--background', '--factory-startup', '--disable-autoexec',
+                '--python-exit-code', '1', '--python', str(Path(__file__).resolve()), '--',
+                '--stationary-stage', '--source', str(source), '--config', str(root/'clay.json'),
+                '--output', str(root/'stationary.blend')], check=True, stdout=log, stderr=subprocess.STDOUT)
+        mask_settings = replace(settings, size=tuple(v*4 for v in settings.size),
+                                pixels_per_unit=settings.pixels_per_unit*4,
+                                supersample=1, object_outline='000000')
+        mask_settings.save(root/'stationary.json')
+        stationary_render = root/'stationary-render'
+        with (root/'stationary-render.log').open('w') as log:
+            subprocess.run(['uv', 'run', '--script', str(Path(__file__).with_name('pipeline.py')),
+                'render', '--source', str(root/'stationary.blend'), '--config', str(root/'stationary.json'),
+                '--output', str(stationary_render), '--blender', args.blender],
+                check=True, stdout=log, stderr=subprocess.STDOUT)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            raise ValueError('original model changed during stationary surface preparation')
     print(json.dumps(pack_sheet(root, settings.directions, frames, fps,
-                               source, digest, surface_render)))
+                               source, digest, surface_render, stationary_render)))
 
 
 def cell_origin(direction: int, phase: int, phases: int, columns: int, cell: tuple[int, int]) -> tuple[int, int]:
@@ -127,7 +209,8 @@ def cell_origin(direction: int, phase: int, phases: int, columns: int, cell: tup
 
 
 def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...], fps: float,
-               source: Path, digest: str, surface_render: Path | None = None) -> dict:
+               source: Path, digest: str, surface_render: Path | None = None,
+               stationary_render: Path | None = None) -> dict:
     from PIL import Image
     boxes = []
     for direction in directions:
@@ -155,6 +238,7 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
     surface_sheet = Image.new('RGBA', sheet.size) if surface_render else None
     native = Image.new('RGBA', size)
     pose_identity = {}
+    stationary_mask = Image.new('L', (width*len(directions), height)) if stationary_render else None
     for row, direction in enumerate(directions):
         known_poses = {}
         canonical_frames = []
@@ -173,10 +257,22 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
                         raise ValueError('surface guide must use the same render size as clay')
                     surface_sheet.paste(im.crop(tuple(v*4 for v in crop)), (x*4, y*4))
                     # Both geometry and authored surface appearance must match.
-                    digest = hashlib.sha256(clay_pixels+im.tobytes()).hexdigest()
-                    canonical_frames.append(known_poses.setdefault(digest, frame))
+                    pose_digest = hashlib.sha256(clay_pixels+im.tobytes()).hexdigest()
+                    canonical_frames.append(known_poses.setdefault(pose_digest, frame))
         if surface_sheet is not None:
             pose_identity[direction] = canonical_frames
+        if stationary_mask is not None:
+            from PIL import ImageChops
+            visible = Image.new('L', (width*4, height*4), 255)
+            for frame in frames:
+                with Image.open(stationary_render/'object-masks'/f'{direction}-{frame:04d}.png') as ids:
+                    cell = ids.convert('RGBA').crop(tuple(v*4 for v in crop))
+                    selected = Image.new('L', cell.size)
+                    selected.putdata([255 if pixel[:3] == (53, 97, 193) and pixel[3] == 255 else 0
+                                      for pixel in cell.get_flattened_data()])
+                    visible = ImageChops.darker(visible, selected)
+            visible = visible.resize((width, height), Image.Resampling.BOX).point(lambda value: 255 if value == 255 else 0)
+            stationary_mask.paste(visible, (row*width, 0))
     sheet.save(root/'clay-sheet.png')
     native.save(root/'clay-native.png')
     native.getchannel('A').save(root/'geometry-mask.png')
@@ -193,6 +289,9 @@ def pack_sheet(root: Path, directions: tuple[str, ...], frames: tuple[int, ...],
         surface_sheet.save(root/'surface-sheet.png')
         metadata['surface_guide'] = 'surface-sheet.png'
         metadata['pose_identity'] = pose_identity
+    if stationary_mask is not None:
+        stationary_mask.save(root/'stationary-surface-mask.png')
+        metadata['stationary_surface_mask'] = 'stationary-surface-mask.png'
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
 
@@ -245,6 +344,35 @@ def hold_identical_poses(paint, mask, metadata):
             paint.paste(paint.crop(box), destination)
             holds[f'{direction}-{frames[column]:04d}'] = canonical
     return holds
+
+
+def hold_stationary_paint(paint, geometry, stationary, metadata):
+    """Keep paint on verified stationary visible surfaces; never add coverage."""
+    from PIL import Image, ImageChops
+    width, height = metadata['cell']
+    directions, frames = metadata['directions'], metadata['source_frames']
+    if stationary.size != (width*len(directions), height):
+        raise ValueError('stationary surface mask dimensions do not match sheet')
+    columns = metadata.get('columns', len(frames))
+    report = {}
+    for row, direction in enumerate(directions):
+        selected = stationary.crop((row*width, 0, (row+1)*width, height))
+        visible = selected.copy()
+        if set(selected.get_flattened_data()) - {0, 255}:
+            raise ValueError('stationary surface mask must be binary')
+        boxes = []
+        for phase in range(len(frames)):
+            x, y = cell_origin(row, phase, len(frames), columns, (width, height))
+            box = (x, y, x+width, y+height)
+            if ImageChops.subtract(selected, geometry.crop(box)).getbbox():
+                raise ValueError('stationary surface mask exceeds geometry in an animation pose')
+            boxes.append(box)
+            visible = ImageChops.darker(visible, paint.crop(box).getchannel('A'))
+        canonical = paint.crop(boxes[0])
+        for box in boxes[1:]:
+            paint.paste(Image.composite(canonical, paint.crop(box), visible), box[:2])
+        report[direction] = {'held_pixels': visible.histogram()[255], 'canonical_source_frame': frames[0]}
+    return report
 
 
 def register_canvas(paint, target):
@@ -328,6 +456,10 @@ def finish(args: argparse.Namespace) -> None:
     if args.register:
         paint, registration = register_canvas(paint, mask)
     holds = hold_identical_poses(paint, mask, metadata)
+    stationary_holds = None
+    if 'stationary_surface_mask' in metadata:
+        stationary = Image.open(args.prepared/metadata['stationary_surface_mask']).convert('L')
+        stationary_holds = hold_stationary_paint(paint, mask, stationary, metadata)
     registered_paint = paint.copy()
     if args.clip_to_geometry:
         # Remove overshoot; never invent coverage where the paint missed geometry.
@@ -338,6 +470,8 @@ def finish(args: argparse.Namespace) -> None:
     (root/'sprites').mkdir()
     if holds:
         (root/'identical-pose-holds.json').write_text(json.dumps(holds, indent=2)+'\n')
+    if stationary_holds:
+        (root/'stationary-surface-holds.json').write_text(json.dumps(stationary_holds, indent=2)+'\n')
     if registration:
         (root/'registration.json').write_text(json.dumps(registration, indent=2)+'\n')
         registered_paint.save(root/'painted-registered.png')
@@ -420,6 +554,15 @@ def finish(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    if '--stationary-stage' in sys.argv:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--stationary-stage', action='store_true')
+        parser.add_argument('--source', type=Path, required=True)
+        parser.add_argument('--output', type=Path, required=True)
+        parser.add_argument('--config', type=Path, required=True)
+        args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
+        stationary_surfaces(args.source, args.output, args.config)
+        return
     if '--clay-stage' in sys.argv:
         parser = argparse.ArgumentParser()
         parser.add_argument('--clay-stage', action='store_true')
@@ -438,6 +581,8 @@ def main() -> None:
     prepare_parser.add_argument('--blender', default='blender')
     prepare_parser.add_argument('--surface-guide', action='store_true',
                                 help='also render the original materials in the same sheet layout')
+    prepare_parser.add_argument('--hold-stationary-surfaces', action='store_true',
+                                help='identify fixed mesh surfaces and hold their paint through the clip; requires surface guide')
     prepare_parser.add_argument('--output', type=Path, required=True)
     finish_parser = sub.add_parser('finish')
     finish_parser.add_argument('--prepared', type=Path, required=True)

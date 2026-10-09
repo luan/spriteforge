@@ -19,6 +19,51 @@ from sheet_paint import sampled_clip
 
 
 class SheetPaintTests(unittest.TestCase):
+    def test_stationary_surface_paint_preserves_moving_pixels_and_coverage(self):
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                paint = Image.new('RGBA', (24, 8))
+                colors = [(35, 113, 201, 255), (211, 82, 36, 255), (147, 183, 71, 255)]
+                for index, color in enumerate(colors):
+                    paint.paste(color, (index*8+1, 1, index*8+7, 7))
+                # Missing coverage in one pose must remain missing in that pose.
+                paint.putpixel((10, 2), (0, 0, 0, 0))
+                paint.save(root/'paint.png')
+                geometry = Image.new('L', paint.size)
+                for index in range(3):
+                    geometry.paste(255, (index*8+1, 1, index*8+7, 7))
+                stationary = Image.new('L', (8, 8))
+                stationary.paste(255, (1, 1, 4, 7))
+                if invalid:
+                    # This pixel vanished from paint earlier; still reject invalid geometry.
+                    geometry.putpixel((18, 2), 0)
+                geometry.save(root/'geometry-mask.png')
+                stationary.save(root/'stationary.png')
+                (root/'sheet.json').write_text(json.dumps({
+                    'cell': [8, 8], 'directions': ['south'], 'source_frames': [1, 6, 11],
+                    'output_native_size': [24, 8], 'preview_fps': 6,
+                    'anchor': [.5, .8], 'pixels_per_unit': 24,
+                    'stationary_surface_mask': 'stationary.png'}))
+                output = root/'finished'
+                result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                    '--prepared', str(root), '--painted', str(root/'paint.png'),
+                    '--output', str(output)], capture_output=True, text=True)
+                if invalid:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('exceeds geometry', result.stderr)
+                    self.assertFalse(output.exists())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                with Image.open(output/'painted-native.png') as actual:
+                    self.assertEqual(actual.getchannel('A').tobytes(), paint.getchannel('A').tobytes())
+                    for index, color in enumerate(colors):
+                        self.assertEqual(actual.getpixel((index*8+3, 3)), colors[0])
+                        self.assertEqual(actual.getpixel((index*8+5, 3)), color)
+                        self.assertEqual(actual.getpixel((index*8+2, 2)), paint.getpixel((index*8+2, 2)))
+                report = json.loads((output/'stationary-surface-holds.json').read_text())
+                self.assertEqual(report, {'south': {'held_pixels': 17, 'canonical_source_frame': 1}})
+
     def test_identical_source_pose_holds_share_paint_and_require_matching_masks(self):
         for matching in (True, False):
             with self.subTest(matching=matching), tempfile.TemporaryDirectory() as temporary:

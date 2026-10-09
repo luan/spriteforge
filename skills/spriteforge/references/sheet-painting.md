@@ -28,6 +28,21 @@ byte-identical. Finishing reuses their canonical paint to prevent texture
 changes during static holds and reversed motion. Other poses keep their own
 paint; `identical-pose-holds.json` records any reuse.
 
+For idle clips or hinged props, add `--hold-stationary-surfaces` alongside
+`--surface-guide` when fixed surfaces acquire changing paint. Blender compares
+each direct mesh's evaluated world vertices, topology, UVs and material
+assignment across the sampled poses. `stationary-objects.json` records which
+meshes remain fixed. A visibility pass then keeps only native pixels fully
+covered by those meshes in every pose. Finishing holds their first-pose paint
+where every painted pose already has opaque coverage; moving surfaces and
+missing coverage retain their own paint. `stationary-surface-holds.json` records
+the held pixel count per facing. Review both the mask and animation: this
+deliberately holds painted shading on fixed surfaces, including moving shadows.
+Use fixed authored UV materials without external animated shader dependencies.
+Instanced meshes and materials with their own animation or image sequences are
+excluded; occurrence tracking and dependent shader animation need a separate
+bake before they can support this option.
+
 Prepare each entity independently. Terrain and water need reusable tile sheets
 and their own frames; opaque tiles can use `opaque: true`. Assemble exported
 atlases and manifests with `scripts/compose.py`, keeping placement, facing and

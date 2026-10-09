@@ -7,6 +7,9 @@ Build actual textured, rigged 3D assets and render them onto a native pixel grid
 Prioritize readable anatomy, rich material detail, volume and consistent motion.
 A modest 3D appearance is appropriate when it improves those qualities. Establish
 one treatment for the whole asset set. Color count is unrestricted.
+Use reference games to benchmark the quality of original assets and scenes:
+readable forms, rich material detail, deliberate pixel structure and stable
+animation. Reconstruct particular characters or scene layouts only when asked.
 
 Resolve resources relative to this skill. Run host Python through `uv run
 --script`; run `bpy` scripts inside Blender. Read
@@ -14,7 +17,7 @@ Resolve resources relative to this skill. Run host Python through `uv run
 [authoring.md](references/authoring.md) for construction and surface maps, and
 the relevant section of [categories.md](references/categories.md).
 [workflow.md](references/workflow.md) documents the renderer and output contract.
-For Ravendawn-style replication, use
+For a Ravendawn-inspired presentation, use
 [projection.md](references/projection.md) and `assets/ravendawn.json` to calibrate
 the diagonal view before modeling a batch.
 An optional [whole-sheet painting route](references/sheet-painting.md) prepares

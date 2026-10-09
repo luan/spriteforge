@@ -44,6 +44,10 @@ hair, painted materials, and authored movement; it is not a finished character.
 
 Open a copy or append `Body` and `Rig` with `bpy.data.libraries.load`. Keep their
 skin weights and armature relationship. Adapt the anatomy to the concept.
+Use continuous proportion changes across connected surfaces. An abrupt scale
+change at a height cutoff can step the shoulders, collar or hood even when each
+mesh has sufficient polygons. Apply the same anatomical transform to the body,
+rig and fitted costume, and inspect the resulting surfaces before retargeting.
 Derive fitted garments from a copy of the body surface, trim the appropriate
 faces, offset along normals, and add cloth thickness and hems. Retain or transfer
 body weights to those garments. Fit straps, cuffs, boots, pouches, and armor to
@@ -72,6 +76,11 @@ the orbital openings with surrounding lids; keep the exposed eye proportion
 consistent with the face. Build a continuous hair mass with shaped directional
 locks and a deliberate hairline. Review these forms in the neutral source and
 the native sprite.
+
+Keep a tunic and its free hem on a continuous surface, or give their joining
+loops matching positions and weights. Fit a belt outside the evaluated garment,
+including its thickness, rather than around the bare body's waist. Review these
+joins through the clip: overlap in the rest pose can open under different weights.
 
 The rig includes root, hips, spine, chest, neck, head, shoulder/upperarm/forearm/
 hand, and thigh/shin/foot/toe bones with .L/.R sides. Preserve deformation and

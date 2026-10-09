@@ -55,7 +55,8 @@ Use the same projection and pixel density for every asset in a scene. Review
 cardinal views with the model's true world orientation; an arbitrary per-asset
 yaw can conceal a camera error in one view while making the others inconsistent.
 
-For reference replication, compare three things separately: modeled proportions,
-surface construction/detail, and lighting/color. A matching silhouette does not
-establish a matching finish. Keep the actual source/clay review and an unseen
+Compare original assets against the reference's quality in three areas: readable
+modeled forms, surface construction/detail, and lighting/color. Shape the asset
+from its own design; matching a particular reference silhouette is relevant only
+when that asset was requested. Keep the actual source/clay review and an unseen
 facing or motion pose beside each accepted render.

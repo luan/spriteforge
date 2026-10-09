@@ -207,6 +207,8 @@ def export_static_variants(root: Path, atlas, manifest: dict) -> None:
 
 def finish(args: argparse.Namespace) -> None:
     from PIL import Image, ImageChops
+    from pixels import finish_image
+    from settings import Settings
     metadata = json.loads((args.prepared/'sheet.json').read_text())
     width, height = metadata['cell']
     size = tuple(metadata['output_native_size'])
@@ -249,6 +251,11 @@ def finish(args: argparse.Namespace) -> None:
             raw_tile = raw_paint.crop(box)
             actual = raw_tile.getchannel('A')
             target = mask.crop(box)
+            clipped_alpha = tile.getchannel('A')
+            if args.outline:
+                tile = finish_image(tile, Settings(size=(width, height),
+                    pixels_per_unit=metadata['pixels_per_unit'], outline=args.outline))
+                paint.paste(tile, (x, y))
             union = ImageChops.lighter(actual, target).histogram()[255]
             intersection = ImageChops.multiply(actual, target).histogram()[255]
             extra = ImageChops.subtract(actual, target)
@@ -259,6 +266,8 @@ def finish(args: argparse.Namespace) -> None:
                            'silhouette_iou': intersection/union,
                            'outside_pixels': extra.histogram()[255],
                            'missing_pixels': missing.histogram()[255],
+                           'paint_outside_pixels': ImageChops.subtract(clipped_alpha, target).histogram()[255],
+                           'outline_pixels': ImageChops.subtract(tile.getchannel('A'), clipped_alpha).histogram()[255],
                            'exported_outside_pixels': ImageChops.subtract(tile.getchannel('A'), target).histogram()[255]})
             tile.save(root/'sprites'/f'{direction}-{frame:04d}.png')
             atlas.paste(tile, (column*width, row*height))
@@ -270,7 +279,7 @@ def finish(args: argparse.Namespace) -> None:
     manifest = {key: metadata[key] for key in ('directions', 'anchor', 'pixels_per_unit')}
     manifest.update(size=[width, height], frames=metadata['source_frames'],
                     fps=metadata['preview_fps'], atlas='atlas.png',
-                    sheet='sheet.json', visual_acceptance='unreviewed')
+                    sheet='sheet.json', outline=args.outline, visual_acceptance='unreviewed')
     for key in ('source', 'source_sha256', 'pivot', 'shear'):
         if key in metadata:
             manifest[key] = metadata[key]
@@ -291,7 +300,7 @@ def finish(args: argparse.Namespace) -> None:
                           duration=round(1000/metadata['preview_fps']), loop=0, lossless=True, exact=True)
     (root/'boundary-report.json').write_text(json.dumps(report, indent=2)+'\n')
     metadata.update(painted=str(args.painted.resolve()), visual_acceptance='unreviewed',
-                    clip_to_geometry=args.clip_to_geometry,
+                    clip_to_geometry=args.clip_to_geometry, outline=args.outline,
                     frame_mode='static_variants' if args.variants else 'animation',
                     boundary_report_measures='raw paint before geometry clipping')
     (root/'sheet.json').write_text(json.dumps(metadata, indent=2)+'\n')
@@ -329,6 +338,9 @@ def main() -> None:
                                help='export each source state as an independent static asset instead of an animation')
     finish_parser.add_argument('--clip-to-geometry', action='store_true',
                                help='remove paint outside the real model mask; retain missing coverage and raw drift evidence')
+    from settings import hexcolor
+    finish_parser.add_argument('--outline', type=hexcolor,
+                               help='add a one-pixel exterior contour after clipping; preserve interior paint and holes')
     args = parser.parse_args()
     if args.command == 'prepare':
         if args.step < 1:

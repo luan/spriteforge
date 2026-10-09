@@ -62,6 +62,13 @@ does not fill missing paint, move features or change retained visible colors.
 The report still measures the raw paint before clipping. Reject misregistered
 paint if clipping severs feet, straps or other features.
 
+Use `--outline 242820` for a consistent one-native-pixel exterior contour after
+clipping. It follows the retained sprite coverage and preserves interior colors
+and holes. The report separates retained paint outside geometry
+(`paint_outside_pixels`), added contour pixels (`outline_pixels`), and total
+exported coverage outside geometry (`exported_outside_pixels`). Review the contour
+with the rest of the asset set; ground tiles normally have no outer outline.
+
 For static terrain states, add `--variants` to `finish`. Each state becomes its
 own `variants/variant-NNNN/` atlas and manifest; `variants.json` lists them for
 composition. Static variants have no animation preview and must not cycle as

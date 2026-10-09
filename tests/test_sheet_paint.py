@@ -122,6 +122,41 @@ class SheetPaintTests(unittest.TestCase):
             self.assertIn('canvas aspect ratio changed', result.stderr)
             self.assertFalse(output.exists())
 
+    def test_outline_preserves_paint_and_holes_and_keeps_raw_drift_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            mask = Image.new('L', (8, 8))
+            mask.paste(255, (1, 1, 7, 7))
+            mask.save(root/'geometry-mask.png')
+            paint = Image.new('RGBA', (8, 8), (35, 182, 211, 255))
+            paint.putpixel((3, 3), (0, 0, 0, 0))
+            paint.save(root/'paint.png')
+            (root/'sheet.json').write_text(json.dumps({
+                'cell': [8, 8], 'directions': ['south'], 'source_frames': [1],
+                'output_native_size': [8, 8], 'preview_fps': 6,
+                'anchor': [.5, .8], 'pixels_per_unit': 24}))
+            output = root/'finished'
+            result = subprocess.run([sys.executable, str(SCRIPT), 'finish',
+                '--prepared', str(root), '--painted', str(root/'paint.png'),
+                '--output', str(output), '--clip-to-geometry', '--outline', '112233'],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with Image.open(output/'sprites/south-0001.png') as exported:
+                self.assertEqual(exported.getpixel((3, 3))[3], 0)
+                for y in range(8):
+                    for x in range(8):
+                        if (x, y) == (3, 3):
+                            continue
+                        expected = (35, 182, 211, 255) if mask.getpixel((x, y)) else (17, 34, 51, 255)
+                        self.assertEqual(exported.getpixel((x, y)), expected)
+            report = json.loads((output/'boundary-report.json').read_text())[0]
+            self.assertEqual(report['outside_pixels'], 28)
+            self.assertEqual(report['missing_pixels'], 1)
+            self.assertEqual(report['paint_outside_pixels'], 0)
+            self.assertEqual(report['outline_pixels'], 28)
+            self.assertEqual(report['exported_outside_pixels'], 28)
+            self.assertEqual(json.loads((output/'manifest.json').read_text())['outline'], '112233')
+
     def test_geometry_clipping_removes_overshoot_without_filling_missing_paint(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
